@@ -26,6 +26,7 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+    const reviewCollection = client.db("gizmorentdb").collection("review");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -96,17 +97,36 @@ async function run() {
 
     // one gadget by id
 
-    app.get('/gadgets/:id', async (req, res) => {
+    app.get("/gadgets/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-        const result = await gadgetCollection.findOne(query);
+      const result = await gadgetCollection.findOne(query);
       res.send(result);
-      
-        });
+    });
 
-    // add from here
+    // review get each product
 
-    
+    app.get("/product-review/:productId", async (req, res) => {
+      const { productId } = req.params;
+
+      try {
+        const reviews = await reviewCollection.find({ productId }).toArray();
+        res.send(reviews);
+      } catch {
+        res.status(500).send({ error: "Failed to fetch reviews" });
+      }
+    });
+
+    // review post
+    app.post("/product-review", async (req, res) => {
+      try {
+        const newReview = req.body;
+        const result = await reviewCollection.insertOne(newReview);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to add review" });
+      }
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
