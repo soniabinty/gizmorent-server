@@ -1,6 +1,8 @@
+
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -27,43 +29,35 @@ async function run() {
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
 
-    const reviewCollection = client.db("gizmorentdb").collection("review");
-
-    const renterCollection = client.db("gizmorentdb").collection("renter");
-
-
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
-      try {
+      
         const newGadget = req.body;
         const result = await gadgetCollection.insertOne(newGadget);
         res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to add gadget" });
-      }
+   
     });
 
     // Get all gadgets
     app.get("/gadgets", async (req, res) => {
-      try {
+     
         const result = await gadgetCollection.find().toArray();
         res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch gadgets" });
-      }
+   
     });
 
     // gadgets filter and search
+
     app.get("/gadgets/search", async (req, res) => {
-      const { query, category, minPrice, maxPrice, sort } = req.query;
-
+      const { query, category, minPrice, maxPrice, sort, page = 1, limit = 6 } = req.query;
+    
       const filter = {};
-
+    
       // Filter by category
       if (category && category !== "All") {
         filter.category = category;
       }
-
+    
       // Filter by search query
       if (query) {
         filter.$or = [
@@ -71,44 +65,69 @@ async function run() {
           { category: { $regex: query, $options: "i" } },
         ];
       }
-
-      // price filter
+    
+      // Price filter
       if (minPrice || maxPrice) {
         filter.price = {};
         if (minPrice) filter.price.$gte = parseFloat(minPrice);
         if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
       }
-
-      // sort
+    
+      // Sort
       let sortOption = {};
       if (sort === "HighToLow") {
         sortOption = { price: -1 };
       } else if (sort === "LowToHigh") {
         sortOption = { price: 1 };
       }
-
+    
       try {
+        // Calculate pagination values
+        const skip = (parseInt(page) - 1) * parseInt(limit);
         const gadgets = await gadgetCollection
           .find(filter)
           .sort(sortOption)
+          .skip(skip)
+          .limit(parseInt(limit))
           .toArray();
-        res.send(gadgets);
+    
+        // Get total count for pagination
+        const totalItems = await gadgetCollection.countDocuments(filter);
+        const totalPages = Math.ceil(totalItems / parseInt(limit));
+    
+        res.json({
+          gadgets,
+          currentPage: parseInt(page),
+          totalPages: totalPages,
+        });
       } catch (error) {
         res.status(500).json({ message: "Error fetching gadgets", error });
       }
     });
 
-    // one gadget by id
 
+    // one gadget by id
     app.get('/gadgets/:id', async (req, res) => {
       const id = req.params.id;
+      
+  
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: 'Invalid gadget ID' });
+      }
+    
       const query = { _id: new ObjectId(id) };
-      const result = await gadgetCollection.findOne(query);
-      res.send(result);
+      try {
+        const result = await gadgetCollection.findOne(query);
+        if (result) {
+          res.send(result);
+        } else {
+          res.status(404).send({ error: 'Gadget not found' });
+        }
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to fetch gadget' });
+      }
     });
-
-
-    // review get each product
+    
 
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
@@ -152,6 +171,10 @@ async function run() {
       res.send(result);
     });
 
+    // add from here
+
+ 
+    
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
