@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
@@ -11,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.du8ko.mongodb.net/?retryWrites=true&w=majority`;
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,6 +24,7 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+    const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -38,6 +37,7 @@ async function run() {
       }
     });
 
+
     // Get all gadgets
     app.get("/gadgets", async (req, res) => {
       try {
@@ -47,6 +47,23 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch gadgets" });
       }
     });
+
+    // Adding gadgets to wishlist
+    app.post('/wishlisted', async (req, res) => {
+      const newWish = req.body
+      const wish = await wishlistedCollection.insertOne(newWish)
+      res.send(wish)
+
+    })
+    app.get("/wishlisted", async (req, res) => {
+      try {
+        const result = await wishlistedCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch gadgets" });
+      }
+    });
+
 
     // gadgets filter and search
 
@@ -99,14 +116,14 @@ async function run() {
     app.get('/gadgets/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-        const result = await gadgetCollection.findOne(query);
+      const result = await gadgetCollection.findOne(query);
       res.send(result);
-      
-        });
+
+    });
 
     // add from here
 
-    
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
