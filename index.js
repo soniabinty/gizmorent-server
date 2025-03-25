@@ -28,6 +28,8 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+    const reviewCollection = client.db("gizmorentdb").collection("review");
+    const renterCollection = client.db("gizmorentdb").collection("renter");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
