@@ -29,11 +29,6 @@ async function run() {
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
 
-    const reviewCollection = client.db("gizmorentdb").collection("review");
-
-    const renterCollection = client.db("gizmorentdb").collection("renter");
-
-
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
       
@@ -52,6 +47,7 @@ async function run() {
     });
 
     // gadgets filter and search
+
     app.get("/gadgets/search", async (req, res) => {
       const { query, category, minPrice, maxPrice, sort, page = 1, limit = 6 } = req.query;
     
@@ -133,9 +129,6 @@ async function run() {
     });
     
 
-
-    // review get each product
-
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
 
@@ -178,6 +171,10 @@ async function run() {
       res.send(result);
     });
 
+    // add from here
+
+ 
+    
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
