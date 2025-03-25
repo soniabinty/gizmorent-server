@@ -26,7 +26,11 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+
     const reviewCollection = client.db("gizmorentdb").collection("review");
+
+    const renterCollection = client.db("gizmorentdb").collection("renter");
+
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -50,7 +54,6 @@ async function run() {
     });
 
     // gadgets filter and search
-
     app.get("/gadgets/search", async (req, res) => {
       const { query, category, minPrice, maxPrice, sort } = req.query;
 
@@ -97,12 +100,13 @@ async function run() {
 
     // one gadget by id
 
-    app.get("/gadgets/:id", async (req, res) => {
+    app.get('/gadgets/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await gadgetCollection.findOne(query);
       res.send(result);
     });
+
 
     // review get each product
 
@@ -127,6 +131,27 @@ async function run() {
         res.status(500).send({ error: "Failed to add review" });
       }
     });
+
+
+    // Add renter application
+    app.post("/renters", async (req, res) => {
+      const { email } = req.body;
+      const existingRenter = await renterCollection.findOne({ email });
+
+      if (existingRenter) {
+        res.status(400).send({ error: "You have already submitted a renter request." });
+      } else {
+        const newRenter = req.body;
+        const result = await renterCollection.insertOne(newRenter);
+        res.send(result);
+      }
+    });
+
+    app.get("/renters", async (req, res) => {
+      const result = await renterCollection.find().toArray();
+      res.send(result);
+    });
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
