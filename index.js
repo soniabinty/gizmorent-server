@@ -6,7 +6,12 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+const corsOptions = {
+  origin: "http://localhost:5173",
+  methods: "GET,POST,DELETE,PUT",
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.du8ko.mongodb.net/?retryWrites=true&w=majority`;
@@ -61,6 +66,23 @@ async function run() {
         res.send(result);
       } catch (error) {
         res.status(500).send({ error: "Failed to fetch gadgets" });
+      }
+    });
+
+    //delete from wishlist
+    app.delete("/wishlisted/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await wishlistedCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ error: "Gadget not found" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting wishlist item:", error);
+        res.status(500).send({ error: "Failed to delete wishlist item" });
       }
     });
 
