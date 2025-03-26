@@ -58,34 +58,36 @@ async function run() {
       const newWish = req.body
       const wish = await wishlistedCollection.insertOne(newWish)
       res.send(wish)
+      console.log(wish)
 
     })
     app.get("/wishlisted", async (req, res) => {
       try {
         const result = await wishlistedCollection.find().toArray();
         res.send(result);
+        console.log(result)
       } catch (error) {
         res.status(500).send({ error: "Failed to fetch gadgets" });
       }
     });
 
-    //delete from wishlist
+    // delete from wishlist
     app.delete("/wishlisted/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+    
       try {
-        const id = req.params.id;
-        const result = await wishlistedCollection.deleteOne({ _id: new ObjectId(id) });
-
-        if (result.deletedCount === 0) {
-          return res.status(404).send({ error: "Gadget not found" });
+        const result = await wishlistedCollection.deleteOne(query);
+        if (result.deletedCount > 0) {
+          res.send({ success: true, message: "Item removed from your wishlist." });
+        } else {
+          res.status(404).send({ success: false, message: "Item not found in wishlist." });
         }
-
-        res.send(result);
       } catch (error) {
-        console.error("Error deleting wishlist item:", error);
-        res.status(500).send({ error: "Failed to delete wishlist item" });
+        res.status(500).send({ success: false, message: "Server error." });
       }
     });
-
+    
 
     // gadgets filter and search
 
