@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
+const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -29,6 +30,7 @@ async function run() {
     const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
     const reviewCollection = client.db("gizmorentdb").collection("review");
     const renterCollection = client.db("gizmorentdb").collection("renter");
+    const userCollection = client.db("gizmorentdb").collection("users");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -176,7 +178,64 @@ async function run() {
       res.send(result);
     });
 
-    // add from here
+
+    // Register User
+    app.post("/register", async (req, res) => {
+      const { name, email, password, photoURL } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = { name, email, password: hashedPassword, photoURL, failedAttempts: 0, isLocked: false, role: 'user' };
+      const result = await userCollection.insertOne(newUser);
+      res.send(result);
+    });
+
+    // Login User
+    app.post("/login", async (req, res) => {
+      const { email, password } = req.body;
+      const user = await userCollection.findOne({ email });
+
+      if (user && user.isLocked) {
+        res.status(403).send({ error: "Account is locked due to multiple failed login attempts." });
+        return;
+      }
+
+      if (user && await bcrypt.compare(password, user.password)) {
+        await userCollection.updateOne({ email }, { $set: { failedAttempts: 0, isLocked: false } });
+        res.send({ message: "Login successful", userId: user._id, user });
+      } else {
+        await userCollection.updateOne({ email }, { $inc: { failedAttempts: 1 } });
+        const updatedUser = await userCollection.findOne({ email });
+        if (updatedUser.failedAttempts >= 3) {
+          await userCollection.updateOne({ email }, { $set: { isLocked: true } });
+          res.status(403).send({ error: "Account is locked due to multiple failed login attempts." });
+        } else {
+          res.status(400).send({ error: "Invalid email or password" });
+        }
+      }
+    });
+
+    // Google Login
+    app.post("/google-login", async (req, res) => {
+      const { email, displayName, photoURL } = req.body;
+      let user = await userCollection.findOne({ email });
+
+      if (!user) {
+        user = {
+          displayName,
+          email,
+          photoURL,
+          role: 'user',
+        };
+        await userCollection.insertOne(user);
+      }
+
+      res.send({ message: "Login successful", userId: user._id, user });
+    });
+
+    app.get("/users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
 
     // Adding gadgets to wishlist
     app.post('/wishlisted', async (req, res) => {
@@ -213,6 +272,7 @@ async function run() {
         res.status(500).json({ error: "Failed to delete item" });
       }
     });
+
 
 
   } catch (error) {
