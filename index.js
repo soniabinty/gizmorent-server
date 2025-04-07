@@ -34,13 +34,10 @@ async function run() {
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
-
       const newGadget = req.body;
       const result = await gadgetCollection.insertOne(newGadget);
       res.send(result);
-
     });
-
 
     // Get all gadgets
     app.get("/gadgets", async (req, res) => {
@@ -251,53 +248,18 @@ async function run() {
     });
 
     // Login User
-    app.post("/login", async (req, res) => {
-      const { email, password } = req.body;
-      const user = await userCollection.findOne({ email });
-
-      if (user && user.isLocked) {
-        res.status(403).send({ error: "Account is locked due to multiple failed login attempts." });
-        return;
-      }
-
-      if (user && await bcrypt.compare(password, user.password)) {
-        await userCollection.updateOne({ email }, { $set: { failedAttempts: 0, isLocked: false } });
-        res.send({ message: "Login successful", userId: user._id, user });
-      } else {
-        await userCollection.updateOne({ email }, { $inc: { failedAttempts: 1 } });
-        const updatedUser = await userCollection.findOne({ email });
-        if (updatedUser.failedAttempts >= 3) {
-          await userCollection.updateOne({ email }, { $set: { isLocked: true } });
-          res.status(403).send({ error: "Account is locked due to multiple failed login attempts." });
-        } else {
-          res.status(400).send({ error: "Invalid email or password" });
-        }
-      }
-    });
-
-    // Google Login
-    app.post("/google-login", async (req, res) => {
-      const { email, displayName, photoURL } = req.body;
-      let user = await userCollection.findOne({ email });
-
-      if (!user) {
-        user = {
-          displayName,
-          email,
-          photoURL,
-          role: 'user',
-        };
-        await userCollection.insertOne(user);
-      }
-
-      res.send({ message: "Login successful", userId: user._id, user });
-    });
-
-    app.get("users", async (req, res) => {
-
+    app.get("/users", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
 
+    });
+
+    app.post("/users", async (req, res) => {
+      const { name, email, password, photoURL } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = { name, email, password: hashedPassword, photoURL, role: 'user' };
+      const result = await userCollection.insertOne(newUser);
+      res.send(result);
     });
 
 
