@@ -178,63 +178,59 @@ async function run() {
 
     // renter approval & renterid
 
-// app.patch("/approve_renter/:email", async (req, res) => {
-//   console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
-//   const email = req.params.email;
+app.patch("/approve_renter/:email", async (req, res) => {
+  console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
+  const email = req.params.email;
 
-//   const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+  const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
 
-//   try {
-//     const result = await userCollection.updateOne(
-//       { email },
-//       {
-//         $set: {
-//           role: "renter",
-//           renterCode,
-//         },
-//       }
-//     );
+  try {
+    const result = await userCollection.updateOne(
+      { email },
+      {
+        $set: {
+          role: "renter",
+          renterCode,
+        },
+      }
+    );
 
-//     if (result.modifiedCount === 0) {
-//       return res.status(404).send({ error: "User not found" });
-//     }
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({ error: "User not found" });
+    }
 
-//     const rentarCollection = client.db("gizmorentdb").collection("rentar");
-//     await rentarCollection.insertOne({
-//       email,
-//       renterCode,
-//       createdAt: new Date(),
-//     });
+    const rentarCollection = client.db("gizmorentdb").collection("rentar");
+    await rentarCollection.insertOne({
+      email,
+      renterCode,
+      createdAt: new Date(),
+      
+    });
 
-//     await rentalRequestCollection.deleteOne({ email });
+    await rentalRequestCollection.deleteOne({ email });
 
-//     res.send({ modifiedCount: result.modifiedCount, renterCode });
-//   } catch (error) {
-//     console.error("Approval error:", error);
-//     res.status(500).send({ error: "Failed to approve renter" });
-//   }
-// });
+    res.send({ modifiedCount: result.modifiedCount, renterCode });
+  } catch (error) {
+    console.error("Approval error:", error);
+    res.status(500).send({ error: "Failed to approve renter" });
+  }
+});
 
 
 //  renter rejection
 
-// app.delete("/reject_renter/:email", async (req, res) => {
-//   const email = req.params.email;
+app.delete("/reject_renter/:email", async (req, res) => {
+  const email = req.params.email;
 
-//   try {
-//     await rentalRequestCollection.deleteOne({ email });
+  try {
+    await rentalRequestCollection.deleteOne({ email });
 
-//     // Optional: Explicitly set to 'user' role
-//     await userCollection.updateOne(
-//       { email },
-//       { $set: { role: "user" } }
-//     );
 
-//     res.send({ message: "Renter request rejected" });
-//   } catch (error) {
-//     res.status(500).send({ error: "Failed to reject request" });
-//   }
-// });
+    res.send({ message: "Renter request rejected" });
+  } catch (error) {
+    res.status(500).send({ error: "Failed to reject request" });
+  }
+});
 
 
 
