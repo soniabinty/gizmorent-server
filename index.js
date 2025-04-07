@@ -29,7 +29,7 @@ async function run() {
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
     const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
     const reviewCollection = client.db("gizmorentdb").collection("review");
-    const renterCollection = client.db("gizmorentdb").collection("renter");
+    const rentalRequestCollection = client.db("gizmorentdb").collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
 
     // Add a gadget
@@ -160,23 +160,85 @@ async function run() {
 
 
     // Add renter application
-    app.post("/renters", async (req, res) => {
+    app.post("/renter_request", async (req, res) => {
       const { email } = req.body;
-      const existingRenter = await renterCollection.findOne({ email });
+      const existingRenter = await rentalRequestCollection.findOne({ email });
 
       if (existingRenter) {
         res.status(400).send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
-        const result = await renterCollection.insertOne(newRenter);
+        const result = await rentalRequestCollection.insertOne(newRenter);
         res.send(result);
       }
     });
 
-    app.get("/renters", async (req, res) => {
-      const result = await renterCollection.find().toArray();
-      res.send(result);
+    app.get("/renter_request", async (req, res) => {
+      const result = await rentalRequestCollection.find().toArray();
+      res.send({ requests: result }); 
     });
+
+
+    // renter approval & renterid
+
+// app.patch("/approve_renter/:email", async (req, res) => {
+//   console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
+//   const email = req.params.email;
+
+//   const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+//   try {
+//     const result = await userCollection.updateOne(
+//       { email },
+//       {
+//         $set: {
+//           role: "renter",
+//           renterCode,
+//         },
+//       }
+//     );
+
+//     if (result.modifiedCount === 0) {
+//       return res.status(404).send({ error: "User not found" });
+//     }
+
+//     const rentarCollection = client.db("gizmorentdb").collection("rentar");
+//     await rentarCollection.insertOne({
+//       email,
+//       renterCode,
+//       createdAt: new Date(),
+//     });
+
+//     await rentalRequestCollection.deleteOne({ email });
+
+//     res.send({ modifiedCount: result.modifiedCount, renterCode });
+//   } catch (error) {
+//     console.error("Approval error:", error);
+//     res.status(500).send({ error: "Failed to approve renter" });
+//   }
+// });
+
+
+//  renter rejection
+
+// app.delete("/reject_renter/:email", async (req, res) => {
+//   const email = req.params.email;
+
+//   try {
+//     await rentalRequestCollection.deleteOne({ email });
+
+//     // Optional: Explicitly set to 'user' role
+//     await userCollection.updateOne(
+//       { email },
+//       { $set: { role: "user" } }
+//     );
+
+//     res.send({ message: "Renter request rejected" });
+//   } catch (error) {
+//     res.status(500).send({ error: "Failed to reject request" });
+//   }
+// });
+
 
 
     // Register User
@@ -231,9 +293,11 @@ async function run() {
       res.send({ message: "Login successful", userId: user._id, user });
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("users", async (req, res) => {
+
       const result = await userCollection.find().toArray();
       res.send(result);
+
     });
 
 
