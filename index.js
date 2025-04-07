@@ -1,8 +1,6 @@
-
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -28,36 +26,46 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+    const reviewCollection = client.db("gizmorentdb").collection("review");
+    const renterCollection = client.db("gizmorentdb").collection("renter");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
-      
-        const newGadget = req.body;
-        const result = await gadgetCollection.insertOne(newGadget);
-        res.send(result);
-   
+      const newGadget = req.body;
+      newGadget.serialCode = `GR-${Date.now()
+        .toString()
+        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
+
+      const result = await gadgetCollection.insertOne(newGadget);
+      res.send(result);
     });
 
     // Get all gadgets
     app.get("/gadgets", async (req, res) => {
-     
-        const result = await gadgetCollection.find().toArray();
-        res.send(result);
-   
+      const result = await gadgetCollection.find().toArray();
+      res.send(result);
     });
 
     // gadgets filter and search
 
     app.get("/gadgets/search", async (req, res) => {
-      const { query, category, minPrice, maxPrice, sort, page = 1, limit = 6 } = req.query;
-    
+      const {
+        query,
+        category,
+        minPrice,
+        maxPrice,
+        sort,
+        page = 1,
+        limit = 6,
+      } = req.query;
+
       const filter = {};
-    
+
       // Filter by category
       if (category && category !== "All") {
         filter.category = category;
       }
-    
+
       // Filter by search query
       if (query) {
         filter.$or = [
@@ -65,14 +73,14 @@ async function run() {
           { category: { $regex: query, $options: "i" } },
         ];
       }
-    
+
       // Price filter
       if (minPrice || maxPrice) {
         filter.price = {};
         if (minPrice) filter.price.$gte = parseFloat(minPrice);
         if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
       }
-    
+
       // Sort
       let sortOption = {};
       if (sort === "HighToLow") {
@@ -80,7 +88,7 @@ async function run() {
       } else if (sort === "LowToHigh") {
         sortOption = { price: 1 };
       }
-    
+
       try {
         // Calculate pagination values
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -90,11 +98,11 @@ async function run() {
           .skip(skip)
           .limit(parseInt(limit))
           .toArray();
-    
+
         // Get total count for pagination
         const totalItems = await gadgetCollection.countDocuments(filter);
         const totalPages = Math.ceil(totalItems / parseInt(limit));
-    
+
         res.json({
           gadgets,
           currentPage: parseInt(page),
@@ -105,29 +113,35 @@ async function run() {
       }
     });
 
-
     // one gadget by id
-    app.get('/gadgets/:id', async (req, res) => {
+    app.get("/gadgets/:id", async (req, res) => {
       const id = req.params.id;
-      
-  
+
       if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: 'Invalid gadget ID' });
+        return res.status(400).send({ error: "Invalid gadget ID" });
       }
-    
+
       const query = { _id: new ObjectId(id) };
       try {
         const result = await gadgetCollection.findOne(query);
         if (result) {
           res.send(result);
         } else {
-          res.status(404).send({ error: 'Gadget not found' });
+          res.status(404).send({ error: "Gadget not found" });
         }
       } catch (error) {
-        res.status(500).send({ error: 'Failed to fetch gadget' });
+        res.status(500).send({ error: "Failed to fetch gadget" });
       }
     });
-    
+
+    // one gadget by product code
+    app.get("/gadget/:serialCode", async (req, res) => {
+      const { serialCode } = req.params;
+      const result = await gadgetCollection.findOne({ serialCode });
+      res.send(result);
+    });
+
+    // review get for single product
 
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
@@ -151,14 +165,15 @@ async function run() {
       }
     });
 
-
     // Add renter application
     app.post("/renters", async (req, res) => {
       const { email } = req.body;
       const existingRenter = await renterCollection.findOne({ email });
 
       if (existingRenter) {
-        res.status(400).send({ error: "You have already submitted a renter request." });
+        res
+          .status(400)
+          .send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
         const result = await renterCollection.insertOne(newRenter);
@@ -172,9 +187,6 @@ async function run() {
     });
 
     // add from here
-
- 
-    
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
