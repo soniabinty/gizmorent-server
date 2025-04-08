@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
+const bcrypt = require("bcrypt");
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
@@ -11,7 +13,6 @@ app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.du8ko.mongodb.net/?retryWrites=true&w=majority`;
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,8 +27,14 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+    const wishlistedCollection = client
+      .db("gizmorentdb")
+      .collection("wishlisted");
     const reviewCollection = client.db("gizmorentdb").collection("review");
-    const renterCollection = client.db("gizmorentdb").collection("renter");
+    const rentalRequestCollection = client
+      .db("gizmorentdb")
+      .collection("renter_request");
+    const userCollection = client.db("gizmorentdb").collection("users");
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -166,9 +173,9 @@ async function run() {
     });
 
     // Add renter application
-    app.post("/renters", async (req, res) => {
+    app.post("/renter_request", async (req, res) => {
       const { email } = req.body;
-      const existingRenter = await renterCollection.findOne({ email });
+      const existingRenter = await rentalRequestCollection.findOne({ email });
 
       if (existingRenter) {
         res
@@ -176,17 +183,141 @@ async function run() {
           .send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
-        const result = await renterCollection.insertOne(newRenter);
+        const result = await rentalRequestCollection.insertOne(newRenter);
         res.send(result);
       }
     });
 
-    app.get("/renters", async (req, res) => {
-      const result = await renterCollection.find().toArray();
+    app.get("/renter_request", async (req, res) => {
+      const result = await rentalRequestCollection.find().toArray();
+      res.send({ requests: result });
+    });
+
+    // renter approval & renterid
+
+    app.patch("/approve_renter/:email", async (req, res) => {
+      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
+      const email = req.params.email;
+
+      const renterCode =
+        "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          {
+            $set: {
+              role: "renter",
+              renterCode,
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        const rentarCollection = client.db("gizmorentdb").collection("rentar");
+        await rentarCollection.insertOne({
+          email,
+          renterCode,
+          createdAt: new Date(),
+        });
+
+        await rentalRequestCollection.deleteOne({ email });
+
+        res.send({ modifiedCount: result.modifiedCount, renterCode });
+      } catch (error) {
+        console.error("Approval error:", error);
+        res.status(500).send({ error: "Failed to approve renter" });
+      }
+    });
+
+    //  renter rejection
+
+    app.delete("/reject_renter/:email", async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        await rentalRequestCollection.deleteOne({ email });
+
+        res.send({ message: "Renter request rejected" });
+      } catch (error) {
+        res.status(500).send({ error: "Failed to reject request" });
+      }
+    });
+
+    // Register User
+    app.post("/register", async (req, res) => {
+      const { name, email, password, photoURL } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = {
+        name,
+        email,
+        password: hashedPassword,
+        photoURL,
+        failedAttempts: 0,
+        isLocked: false,
+        role: "user",
+      };
+      const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
 
     // add from here
+    // Login User
+    app.get("/users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.post("/users", async (req, res) => {
+      const { name, email, password, photoURL } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = {
+        name,
+        email,
+        password: hashedPassword,
+        photoURL,
+        role: "user",
+      };
+      const result = await userCollection.insertOne(newUser);
+      res.send(result);
+    });
+
+    // Adding gadgets to wishlist
+    app.post("/wishlisted", async (req, res) => {
+      const newWish = req.body;
+      const wish = await wishlistedCollection.insertOne(newWish);
+      res.send(wish);
+      console.log(wish);
+    });
+    app.get("/wishlisted", async (req, res) => {
+      try {
+        const result = await wishlistedCollection.find().toArray();
+        res.send(result);
+        console.log(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch gadgets" });
+      }
+    });
+
+    // Delete from wishlist
+    app.delete("/wishlisted/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await wishlistedCollection.deleteOne(query);
+
+        if (result.deletedCount > 0) {
+          res.json({ deletedCount: 1 });
+        } else {
+          res.status(404).json({ error: "Item not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ error: "Failed to delete item" });
+      }
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
