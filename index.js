@@ -260,23 +260,46 @@ app.delete("/reject_renter/:email", async (req, res) => {
 
 
     // Adding gadgets to wishlist
-    app.post('/wishlisted', async (req, res) => {
-      const newWish = req.body
-      const wish = await wishlistedCollection.insertOne(newWish)
-      res.send(wish)
-      console.log(wish)
+  // Adding gadgets to wishlist
+  app.post("/wishlisted", async (req, res) => {
+    try {
+      const { gadgetId, name, image, price, category, email } = req.body;
+  
+      // Check if any required field is missing
+      if (!gadgetId || !name || !price || !email) {
+        return res.status(400).send({ message: "Missing required fields" });
+      }
+  
+      // Prevent duplicate entries
+      const exists = await wishlistedCollection.findOne({ email, gadgetId });
+  
+      if (exists) {
+        return res.status(400).send({ message: "Gadget already in wishlist" });
+      }
+  
+      // Insert the new wishlist item
+      const wish = await wishlistedCollection.insertOne(req.body);
+      res.status(201).send(wish);
+    } catch (error) {
+      console.error("Wishlist error:", error);
+      res.status(500).send({ message: "Failed to add to wishlist" });
+    }
+  });
+  
+  
 
-    })
+    // get wishlist bi email
+
     app.get("/wishlisted", async (req, res) => {
       try {
-        const result = await wishlistedCollection.find().toArray();
+        const { email } = req.query;
+        const query = email ? { email } : {};
+        const result = await wishlistedCollection.find(query).toArray();
         res.send(result);
-        console.log(result)
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch gadgets" });
+        res.status(500).send({ error: "Failed to fetch wishlist" });
       }
     });
-
 
     // Delete from wishlist
     app.delete("/wishlisted/:id", async (req, res) => {
