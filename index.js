@@ -138,6 +138,17 @@ async function run() {
       }
     });
 
+    // one gadget by product code
+    app.get("/gadget/:serialCode", async (req, res) => {
+      const { serialCode } = req.params;
+      try {
+        const result = await gadgetCollection.findOne({ serialCode });
+        res.send(result);
+      } catch {
+        res.status(500).send({ error: "Failed to fetch product" });
+      }
+    });
+
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
 
