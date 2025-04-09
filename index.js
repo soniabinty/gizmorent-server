@@ -40,6 +40,10 @@ async function run() {
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
       const newGadget = req.body;
+      newGadget.serialCode = `GR-${Date.now()
+        .toString()
+        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
+        
       const result = await gadgetCollection.insertOne(newGadget);
       res.send(result);
     });
@@ -137,6 +141,17 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch gadget" });
       }
     });
+
+    // one gadget by product code
+    app.get("/gadget/:serialCode", async (req, res) => {
+      const { serialCode } = req.params;
+      try {
+        const result = await gadgetCollection.findOne({ serialCode });
+        res.send(result);
+      } catch {
+        res.status(500).send({ error: "Failed to fetch product" });
+      }
+    });
 
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
