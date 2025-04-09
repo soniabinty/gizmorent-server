@@ -40,6 +40,10 @@ async function run() {
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
       const newGadget = req.body;
+      newGadget.serialCode = `GR-${Date.now()
+        .toString()
+        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
+        
       const result = await gadgetCollection.insertOne(newGadget);
       res.send(result);
     });
