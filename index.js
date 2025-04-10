@@ -199,11 +199,18 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
+
+      console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
+      const email = req.params.email;
+
+      const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
       const renterCode =
         "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
 
       try {
         const result = await userCollection.updateOne(
@@ -225,6 +232,35 @@ async function run() {
           email,
           renterCode,
           createdAt: new Date(),
+
+
+        });
+
+        await rentalRequestCollection.deleteOne({ email });
+
+        res.send({ modifiedCount: result.modifiedCount, renterCode });
+      } catch (error) {
+        console.error("Approval error:", error);
+        res.status(500).send({ error: "Failed to approve renter" });
+      }
+    });
+
+
+    //  renter rejection
+
+    app.delete("/reject_renter/:email", async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        await rentalRequestCollection.deleteOne({ email });
+
+
+        res.send({ message: "Renter request rejected" });
+      } catch (error) {
+        res.status(500).send({ error: "Failed to reject request" });
+      }
+    });
+
         });
 
         await rentalRequestCollection.deleteOne({ email });
@@ -240,6 +276,7 @@ async function run() {
 
     app.delete("/reject_renter/:email", async (req, res) => {
       const email = req.params.email;
+
 
       try {
         await rentalRequestCollection.deleteOne({ email });
@@ -267,10 +304,34 @@ async function run() {
       res.send(result);
     });
 
-    // Login User
-    app.get("/users", async (req, res) => {
+    // test User
+    app.get("/user", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
+
+    });
+
+    // Get user data by email
+    app.get("/users", async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) {
+        return res.status(400).send({ error: "Email is required" });
+      }
+
+      try {
+        const user = await userCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        res.send(user);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        res.status(500).send({ error: "Failed to fetch user data" });
+      }
+
     });
      
     // user post
@@ -287,6 +348,108 @@ async function run() {
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
+
+
+    app.post("/update-password", async (req, res) => {
+      const { email, newPassword } = req.body;
+
+      if (!email || !newPassword) {
+        return res.status(400).send({ error: "Email and new password are required" });
+      }
+
+      try {
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update the password in the database
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: { password: hashedPassword } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        res.send({ message: "Password updated successfully" });
+      } catch (error) {
+        console.error("Error updating password:", error);
+        res.status(500).send({ error: "Failed to update password" });
+      }
+    });
+
+
+    app.patch("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const updatedFields = req.body;
+
+      try {
+        // Step 1: Check if the user exists in the database
+        const existingUser = await userCollection.findOne({ email });
+
+        if (!existingUser) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        // Step 2: Update only the provided fields
+        const updateQuery = {};
+        for (const key in updatedFields) {
+          if (updatedFields[key] !== undefined) {
+            updateQuery[key] = updatedFields[key];
+          }
+        }
+
+        // Step 3: Perform the update operation
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: updateQuery }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ error: "Failed to update user" });
+        }
+
+        // Step 4: Send success response
+        res.send({ message: "User updated successfully", updatedFields });
+      } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).send({ error: "Failed to update user" });
+      }
+    });
+
+    // Google login or signup route
+    app.post("/auth/google", async (req, res) => {
+      const { name, email, photoURL } = req.body;
+
+      if (!email) {
+        return res.status(400).send({ error: "Email is required" });
+      }
+
+      try {
+        // Step 1: Check if the user already exists
+        const existingUser = await userCollection.findOne({ email });
+
+        if (existingUser) {
+          return res.send(existingUser);
+        }
+
+        const newUser = {
+          name,
+          email,
+          photoURL,
+          role: "user",
+          createdAt: new Date(),
+        };
+
+        const result = await userCollection.insertOne(newUser);
+
+        res.send(newUser);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to process Google login" });
+      }
+    });
+
+
 
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
