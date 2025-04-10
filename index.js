@@ -30,13 +30,15 @@ async function run() {
     const wishlistedCollection = client
       .db("gizmorentdb")
       .collection("wishlisted");
+    
+      const paymentCollection = client.db("gizmorentdb").collection("payments");
     const reviewCollection = client.db("gizmorentdb").collection("review");
     const rentalRequestCollection = client
       .db("gizmorentdb")
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    const  paymentsCollection = client.db('gizmorentdb').collection('payments')
+   
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -604,56 +606,45 @@ async function run() {
       }
     });
 
+
+
+
+    app.post("/create-payment-intent", async (req, res) => {
+  const { price } = req.body;
+  const totalAmount = parseInt(price * 100); // Stripe expects the amount in cents
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalAmount,
+      currency: "usd",
+      payment_method_types: ["card"],
+    });
+  
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (error) {
+    console.error("Error creating payment intent:", error);
+    res.status(500).send({ error: "Error creating payment intent" });
+  }
+});
+
+app.post("/payments", async (req, res) => {
+  const paymentInfo = req.body;
+  
+  const result = await paymentCollection.insertOne(paymentInfo);
+  res.send(result);
+
+})
+
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
+
+
 }
-// payment intrigation
-
-app.post('/create-payment-intent', async (req, res) => {
-  const { price } = req.body;
-
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: price * 100, // Stripe expects the amount in cents
-      currency: 'usd',
-      payment_method_types: ['card'],
-    });
-
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error("Payment Intent Error:", error);
-
-    // Send more specific error messages based on the error type
-    if (error.type === 'StripeCardError') {
-      res.status(400).send({ error: "Card error: " + error.message });
-    } else {
-      res.status(500).send({ error: "Internal Server Error" });
-    }
-  }
-});
 
 
-
-
-app.post("/payments", async (req, res) => {
-  const { userId, email, amount, transactionId, date } = paymentInfo;
-
-  // Check for missing data
-  if (!userId || !email || !transactionId || !amount || !date) {
-    return res.status(400).send({ error: "Missing payment data" });
-  }
-  console.log(paymentInfo)
-  try {
-    const result = await paymentsCollection.insertOne(paymentInfo);
-   
-    res.send({ success: result.insertedId ? true : false });
-  } catch (error) {
-    console.error("Error saving payment:", error);
-    res.status(500).send({ error: "Internal server error" });
-  }
-  
-});
 
 
 
