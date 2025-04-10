@@ -30,7 +30,12 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
+
     const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
+
+    
+      const paymentCollection = client.db("gizmorentdb").collection("payments");
+
     const reviewCollection = client.db("gizmorentdb").collection("review");
     const rentalRequestCollection = client.db("gizmorentdb").collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
@@ -38,7 +43,7 @@ async function run() {
     const transactionsCollection = client.db("gizmorentdb").collection("transactions");
 
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    // const paymentsCollection = client.db('gizmorentdb').collection('payments')
+
 
 
     // Add a gadget
@@ -707,10 +712,52 @@ async function run() {
       }
     });
 
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
+
+
+
+
+    app.post("/create-payment-intent", async (req, res) => {
+  const { price } = req.body;
+  const totalAmount = parseInt(price * 100); // Stripe expects the amount in cents
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalAmount,
+      currency: "usd",
+      payment_method_types: ["card"],
+    });
+  
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (error) {
+    console.error("Error creating payment intent:", error);
+    res.status(500).send({ error: "Error creating payment intent" });
+  }
+});
+
+app.post("/payments", async (req, res) => {
+  const paymentInfo = req.body;
+  
+  const result = await paymentCollection.insertOne(paymentInfo);
+  res.send(result);
+
+})
+
+
+  } catch (error) {
+    console.error("Error connecting to MongoDB:", error);
+  }
+
+
+}
+
+
+
 
 run();
 
