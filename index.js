@@ -5,7 +5,7 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
+const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY )
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -36,6 +36,7 @@ async function run() {
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
+    const  paymentsCollection = client.db('gizmorentdb').collection('payments')
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -201,9 +202,8 @@ async function run() {
     app.patch("/approve_renter/:email", async (req, res) => {
 
       console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
-      const email = req.params.email;
-
-      const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    
+   
 
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
@@ -246,31 +246,7 @@ async function run() {
     });
 
 
-    //  renter rejection
-
-    app.delete("/reject_renter/:email", async (req, res) => {
-      const email = req.params.email;
-
-      try {
-        await rentalRequestCollection.deleteOne({ email });
-
-
-        res.send({ message: "Renter request rejected" });
-      } catch (error) {
-        res.status(500).send({ error: "Failed to reject request" });
-      }
-    });
-
-        });
-
-        await rentalRequestCollection.deleteOne({ email });
-
-        res.send({ modifiedCount: result.modifiedCount, renterCode });
-      } catch (error) {
-        console.error("Approval error:", error);
-        res.status(500).send({ error: "Failed to approve renter" });
-      }
-    });
+  
 
     //  renter rejection
 
@@ -632,6 +608,56 @@ async function run() {
     console.error("Error connecting to MongoDB:", error);
   }
 }
+// payment intrigation
+
+app.post('/create-payment-intent', async (req, res) => {
+  const { price } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: price * 100, // Stripe expects the amount in cents
+      currency: 'usd',
+      payment_method_types: ['card'],
+    });
+
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error("Payment Intent Error:", error);
+
+    // Send more specific error messages based on the error type
+    if (error.type === 'StripeCardError') {
+      res.status(400).send({ error: "Card error: " + error.message });
+    } else {
+      res.status(500).send({ error: "Internal Server Error" });
+    }
+  }
+});
+
+
+
+
+app.post("/payments", async (req, res) => {
+  const { userId, email, amount, transactionId, date } = paymentInfo;
+
+  // Check for missing data
+  if (!userId || !email || !transactionId || !amount || !date) {
+    return res.status(400).send({ error: "Missing payment data" });
+  }
+  console.log(paymentInfo)
+  try {
+    const result = await paymentsCollection.insertOne(paymentInfo);
+   
+    res.send({ success: result.insertedId ? true : false });
+  } catch (error) {
+    console.error("Error saving payment:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+  
+});
+
+
+
+
 
 run();
 
