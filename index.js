@@ -40,9 +40,10 @@ async function run() {
     const rentalRequestCollection = client.db("gizmorentdb").collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
 
-    const transactionsCollection = client.db("gizmorentdb").collection("transactions");
+    // const transactionsCollection = client.db("gizmorentdb").collection("transactions");
 
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
+    const orderCollection = client.db("gizmorentdb").collection("orders");
    
 
 
@@ -429,6 +430,139 @@ async function run() {
         res.status(500).json({ error: "Failed to delete item" });
       }
     });
+
+      // add cart list
+      app.post("/cartlist", async (req, res) => {
+        try {
+       
+          const {
+            gadgetId,
+            name,
+            image,
+            price,
+            category,
+            email,
+            quantity = 1,
+          } = req.body;
+  
+          if (!gadgetId || !name || !price || !email) {
+            return res.status(400).send({ message: "Missing required fields" });
+          }
+  
+          const cartItem = await cartlistCollection.insertOne({
+            ...req.body,
+            quantity,
+          });
+          res.status(201).send(cartItem);
+        } catch (error) {
+          console.error("Cartlist error:", error);
+          res.status(500).send({ message: "Failed to add to cart" });
+        }
+      });
+       
+      // get cart by email
+      app.get("/cartlist", async (req, res) => {
+        try {
+          const { email } = req.query; 
+  
+          if (!email) {
+            return res.status(400).json({ error: "Email is required" });
+          }
+  
+         
+          const cartItems = await cartlistCollection.find({ email }).toArray();
+  
+          if (cartItems.length === 0) {
+            return res
+              .status(404)
+              .json({ message: "No items found in the cart" });
+          }
+  
+          
+          return res.status(200).json(cartItems);
+        } catch (error) {
+          console.error("Error fetching cart items:", error);
+          return res.status(500).json({ error: "Failed to fetch cart items" });
+        }
+      });
+  
+      // Remove from cart
+      app.delete("/cartlist/:id", async (req, res) => {
+        try {
+          const id = req.params.id; 
+  
+       
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ error: "Invalid ID format" });
+          }
+  
+          const query = { _id: new ObjectId(id) }; 
+          const result = await cartlistCollection.deleteOne(query);
+  
+          if (result.deletedCount > 0) {
+            return res.json({ deletedCount: 1, id }); 
+          } else {
+            return res.status(404).json({ error: "Item not found in cart" });
+          }
+        } catch (error) {
+          console.error(error);
+          return res
+            .status(500)
+            .json({ error: "Failed to delete item from cart" });
+        }
+      });
+    
+      // update quantity
+  
+      app.patch("/cartlist/:id", async (req, res) => {
+        try {
+          const id = req.params.id; 
+          const { quantity } = req.body; 
+  
+        
+          if (quantity <= 0 || isNaN(quantity)) {
+            return res
+              .status(400)
+              .json({ error: "Quantity must be a positive number" });
+          }
+  
+          
+          if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ error: "Invalid ID format" });
+          }
+  
+          const query = { _id: new ObjectId(id) }; 
+          const updateDoc = {
+            $set: { quantity: quantity }, 
+          };
+  
+          const result = await cartlistCollection.updateOne(query, updateDoc); 
+  
+          if (result.modifiedCount > 0) {
+           
+            const updatedItem = await cartlistCollection.findOne(query); 
+            return res.json(updatedItem); 
+          } else {
+            return res.status(404).json({ error: "Item not found in cart" });
+          }
+        } catch (error) {
+          console.error("Error updating cart item quantity:", error);
+          return res
+            .status(500)
+            .json({ error: "Failed to update item quantity" });
+        }
+      });
+  
+  // order
+
+  app.post("/orders", async (req, res) => {
+    const orderData = req.body;
+    
+    const result = await orderCollection.insertOne(orderData);
+    res.send(result);
+  
+  })
+  
 
     // app.get("/initiate-payment", async (req, res) => {
     //   const result = await transactionsCollection.find().toArray();
