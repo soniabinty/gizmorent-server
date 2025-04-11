@@ -37,6 +37,7 @@ async function run() {
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
     const  paymentsCollection = client.db('gizmorentdb').collection('payments')
+    const  ordersCollection = client.db('gizmorentdb').collection('orders')
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -604,11 +605,7 @@ async function run() {
       }
     });
 
-  } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
-  }
-}
-// payment intrigation
+    // payment intrigation
 
 app.post('/create-payment-intent', async (req, res) => {
   const { price } = req.body;
@@ -637,23 +634,31 @@ app.post('/create-payment-intent', async (req, res) => {
 
 
 app.post("/payments", async (req, res) => {
-  const { userId, email, amount, transactionId, date } = paymentInfo;
+  const  paymentInfo = req.body
 
-  // Check for missing data
-  if (!userId || !email || !transactionId || !amount || !date) {
-    return res.status(400).send({ error: "Missing payment data" });
-  }
-  console.log(paymentInfo)
-  try {
+
     const result = await paymentsCollection.insertOne(paymentInfo);
    
-    res.send({ success: result.insertedId ? true : false });
-  } catch (error) {
-    console.error("Error saving payment:", error);
-    res.status(500).send({ error: "Internal server error" });
-  }
+    res.send(result);
+
   
 });
+
+app.post("/orders", async (req, res) => {
+  const  orderData = req.body
+    const result = await ordersCollection.insertOne(orderData);
+  
+    res.send(result);
+
+  
+});
+
+
+  
+  } catch (error) {
+    console.error("Error connecting to MongoDB:", error);
+  }
+}
 
 
 
