@@ -190,7 +190,7 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-      console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
+      console.log('Approving renter:', req.params.email); 
     
    
 
@@ -430,139 +430,139 @@ async function run() {
       }
     });
 
-    app.get("/initiate-payment", async (req, res) => {
-      const result = await transactionsCollection.find().toArray();
-      res.send(result);
-    })
+    // app.get("/initiate-payment", async (req, res) => {
+    //   const result = await transactionsCollection.find().toArray();
+    //   res.send(result);
+    // })
 
 
-    // Payment initiation
-    app.post("/initiate-payment", async (req, res) => {
-      const { total_amount, cus_name, cus_email, cus_phone } = req.body;
+    // // Payment initiation
+    // app.post("/initiate-payment", async (req, res) => {
+    //   const { total_amount, cus_name, cus_email, cus_phone } = req.body;
 
-      const paymentData = {
-        total_amount,
-        currency: "BDT",
-        tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "http://localhost:5173/payment-success",
-        fail_url: "http://localhost:5173/payment-fail",
-        cancel_url: "http://localhost:5173/payment-cancel",
-        ipn_url: "http://localhost:5173/ipn", // Optional
-        shipping_method: "Courier",
-        product_name: "Gadget Rent",
-        product_category: "Rental",
-        product_profile: "general",
-        cus_name,
-        cus_email,
-        cus_add1: "Dhaka",
-        cus_add2: "Dhaka",
-        cus_city: "Dhaka",
-        cus_state: "Dhaka",
-        cus_postcode: "1000",
-        cus_country: "Bangladesh",
-        cus_phone,
-        cus_fax: cus_phone, // Optional
-        ship_name: cus_name, // Same as customer name for simplicity
-        ship_add1: "Dhaka",
-        ship_add2: "Dhaka",
-        ship_city: "Dhaka",
-        ship_state: "Dhaka",
-        ship_postcode: "1000",
-        ship_country: "Bangladesh",
-      };
+    //   const paymentData = {
+    //     total_amount,
+    //     currency: "BDT",
+    //     tran_id: `TRX_${Date.now()}`, // Unique transaction ID
+    //     success_url: "http://localhost:5173/payment-success",
+    //     fail_url: "http://localhost:5173/payment-fail",
+    //     cancel_url: "http://localhost:5173/payment-cancel",
+    //     ipn_url: "http://localhost:5173/ipn", // Optional
+    //     shipping_method: "Courier",
+    //     product_name: "Gadget Rent",
+    //     product_category: "Rental",
+    //     product_profile: "general",
+    //     cus_name,
+    //     cus_email,
+    //     cus_add1: "Dhaka",
+    //     cus_add2: "Dhaka",
+    //     cus_city: "Dhaka",
+    //     cus_state: "Dhaka",
+    //     cus_postcode: "1000",
+    //     cus_country: "Bangladesh",
+    //     cus_phone,
+    //     cus_fax: cus_phone, // Optional
+    //     ship_name: cus_name, // Same as customer name for simplicity
+    //     ship_add1: "Dhaka",
+    //     ship_add2: "Dhaka",
+    //     ship_city: "Dhaka",
+    //     ship_state: "Dhaka",
+    //     ship_postcode: "1000",
+    //     ship_country: "Bangladesh",
+    //   };
 
-      try {
-        console.log("Initiating payment with data:", paymentData);
+    //   try {
+    //     console.log("Initiating payment with data:", paymentData);
 
-        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-        const apiResponse = await sslcz.init(paymentData);
+    //     const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+    //     const apiResponse = await sslcz.init(paymentData);
 
 
-        if (apiResponse && apiResponse.GatewayPageURL) {
-          // Optional: Save the transaction in the database
-          await await transactionsCollection.insertOne({
-            transactionId: paymentData.tran_id,
-            amount: total_amount,
-            status: "Pending",
-            date: new Date(),
-            customer: { cus_name, cus_email, cus_phone },
-          });
+    //     if (apiResponse && apiResponse.GatewayPageURL) {
+      
+    //       await await transactionsCollection.insertOne({
+    //         transactionId: paymentData.tran_id,
+    //         amount: total_amount,
+    //         status: "Pending",
+    //         date: new Date(),
+    //         customer: { cus_name, cus_email, cus_phone },
+    //       });
 
-          // Redirect the user to the payment gateway
-          res.send({ url: apiResponse.GatewayPageURL });
-        } else {
-          res.status(500).send({ error: "Failed to get payment gateway URL" });
-        }
-      } catch (error) {
-        console.error("SSLCommerz Error:", error.message);
-        res.status(500).send({ error: "Payment initiation failed" });
-      }
-    });
+    //       // Redirect the user to the payment gateway
+    //       res.send({ url: apiResponse.GatewayPageURL });
+    //     } else {
+    //       res.status(500).send({ error: "Failed to get payment gateway URL" });
+    //     }
+    //   } catch (error) {
+    //     console.error("SSLCommerz Error:", error.message);
+    //     res.status(500).send({ error: "Payment initiation failed" });
+    //   }
+    // });
 
-    app.post("/payment-success", async (req, res) => {
-      const { tran_id, val_id } = req.body; // Include val_id from the payment gateway response
+    // app.post("/payment-success", async (req, res) => {
+    //   const { tran_id, val_id } = req.body; // Include val_id from the payment gateway response
 
-      try {
-        // Step 1: Validate the transaction with SSLCommerz
-        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-        const validationResponse = await sslcz.validate({ val_id });
+    //   try {
+    //     // Step 1: Validate the transaction with SSLCommerz
+    //     const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+    //     const validationResponse = await sslcz.validate({ val_id });
 
-        if (validationResponse.status !== "VALID") {
-          return res.status(400).send({ error: "Transaction validation failed" });
-        }
+    //     if (validationResponse.status !== "VALID") {
+    //       return res.status(400).send({ error: "Transaction validation failed" });
+    //     }
 
-        // Step 2: Update transaction in the database
-        const result = await transactionsCollection.updateOne(
-          { transactionId: tran_id },
-          {
-            $set: {
-              status: "Successful",
-              validationDetails: validationResponse,
-            },
-          }
-        );
+    //     // Step 2: Update transaction in the database
+    //     const result = await transactionsCollection.updateOne(
+    //       { transactionId: tran_id },
+    //       {
+    //         $set: {
+    //           status: "Successful",
+    //           validationDetails: validationResponse,
+    //         },
+    //       }
+    //     );
 
-        if (result.modifiedCount > 0) {
-          res.send({ message: "Payment validated and success recorded." });
-        } else {
-          res.status(404).send({ error: "Transaction not found" });
-        }
-      } catch (error) {
-        console.error("Error validating transaction:", error);
-        res.status(500).send({ error: "Failed to validate transaction" });
-      }
-    });
+    //     if (result.modifiedCount > 0) {
+    //       res.send({ message: "Payment validated and success recorded." });
+    //     } else {
+    //       res.status(404).send({ error: "Transaction not found" });
+    //     }
+    //   } catch (error) {
+    //     console.error("Error validating transaction:", error);
+    //     res.status(500).send({ error: "Failed to validate transaction" });
+    //   }
+    // });
 
-    app.post("/update-payment-status", async (req, res) => {
-      const { transactionId, status } = req.body;
+    // app.post("/update-payment-status", async (req, res) => {
+    //   const { transactionId, status } = req.body;
 
-      if (!transactionId || !status) {
-        return res.status(400).send({ success: false, error: "Transaction ID and status are required." });
-      }
+    //   if (!transactionId || !status) {
+    //     return res.status(400).send({ success: false, error: "Transaction ID and status are required." });
+    //   }
 
-      try {
-        const result = await transactionsCollection.updateOne(
-          { transactionId },
-          { $set: { status } }
-        );
+    //   try {
+    //     const result = await transactionsCollection.updateOne(
+    //       { transactionId },
+    //       { $set: { status } }
+    //     );
 
-        if (result.modifiedCount > 0) {
-          res.send({ success: true, message: "Payment status updated successfully." });
-        } else {
-          res.status(404).send({ success: false, error: "Transaction not found." });
-        }
-      } catch (error) {
-        console.error("Error updating payment status:", error);
-        res.status(500).send({ success: false, error: "Failed to update payment status." });
-      }
-    });
+    //     if (result.modifiedCount > 0) {
+    //       res.send({ success: true, message: "Payment status updated successfully." });
+    //     } else {
+    //       res.status(404).send({ success: false, error: "Transaction not found." });
+    //     }
+    //   } catch (error) {
+    //     console.error("Error updating payment status:", error);
+    //     res.status(500).send({ success: false, error: "Failed to update payment status." });
+    //   }
+    // });
 
 
 
 
     app.post("/create-payment-intent", async (req, res) => {
   const { price } = req.body;
-  const totalAmount = parseInt(price * 100); // Stripe expects the amount in cents
+  const totalAmount = parseInt(price * 100); 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
