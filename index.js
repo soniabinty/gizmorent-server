@@ -644,6 +644,8 @@ app.post("/payments", async (req, res) => {
   
 });
 
+// order post
+
 app.post("/orders", async (req, res) => {
   const orderData = req.body; 
 
@@ -667,13 +669,32 @@ app.post("/orders", async (req, res) => {
   }
 });
 
-
+// order get
 
 
 app.get("/orders", async (req, res) => {
   const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
   res.send({ requests: orders });
 });
+
+// order update
+
+app.patch("/orders/:id", async (req, res) => {
+  const orderId = req.params.id;
+  const { status } = req.body;
+
+  try {
+    const result = await ordersCollection.updateOne(
+      { _id: new ObjectId(orderId) },
+      { $set: { status: status } }
+    );
+    res.send(result);
+  } catch (error) {
+    console.error("Status update error:", error);
+    res.status(500).send({ error: "Failed to update status." });
+  }
+});
+
 
   
   } catch (error) {
