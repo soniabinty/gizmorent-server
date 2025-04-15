@@ -710,9 +710,9 @@ async function run() {
         total_amount,
         currency: "USD",
         tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "http://localhost:5173/payment-success", // Add Like site Url 
-        fail_url: "http://localhost:5173/payment-fail",
-        cancel_url: "http://localhost:5173/payment-cancel",
+        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
+        fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
+        cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
         cus_name,
         cus_email,
         cus_phone,
