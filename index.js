@@ -29,17 +29,20 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
-    const wishlistedCollection = client
-      .db("gizmorentdb")
-      .collection("wishlisted");
+
+    const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
+
+
+    const paymentCollection = client.db("gizmorentdb").collection("payments");
+
     const reviewCollection = client.db("gizmorentdb").collection("review");
     const rentalRequestCollection = client
       .db("gizmorentdb")
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    const paymentsCollection = client.db('gizmorentdb').collection('payments')
-    const ordersCollection = client.db('gizmorentdb').collection('orders')
+    // const paymentsCollection = client.db('gizmorentdb').collection('payments')
+
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -751,14 +754,93 @@ async function run() {
       }
     });
 
+    app.post("/payment-success", async (req, res) => {
+      const { tran_id, val_id } = req.body; // Include val_id from the payment gateway response
+
+      try {
+        // Step 1: Validate the transaction with SSLCommerz
+        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+        const validationResponse = await sslcz.validate({ val_id });
+
+        if (validationResponse.status !== "VALID") {
+          return res.status(400).send({ error: "Transaction validation failed" });
+        }
+
+        // Step 2: Update transaction in the database
+        const result = await transactionsCollection.updateOne(
+          { transactionId: tran_id },
+          {
+            $set: {
+              status: "Successful",
+              validationDetails: validationResponse,
+            },
+          }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ message: "Payment validated and success recorded." });
+        } else {
+          res.status(404).send({ error: "Transaction not found" });
+        }
+      } catch (error) {
+        console.error("Error validating transaction:", error);
+        res.status(500).send({ error: "Failed to validate transaction" });
+      }
+    });
+
+    // Stripe payment route
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price, cus_name, cus_email } = req.body;
+
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: price * 100, // Stripe expects the amount in cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        // Save transaction in the unified collection
+        await transactionsCollection.insertOne({
+          transactionId: paymentIntent.id,
+          amount: price,
+          paymentMethod: "Stripe",
+          status: "Pending",
+          date: new Date(),
+          customerDetails: { cus_name, cus_email },
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        console.error("Payment Intent Error:", error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
+    // Stripe Webhook or Success Callback
+    app.post("/stripe-payment-success", async (req, res) => {
+      const { transactionId } = req.body;
+
+      try {
+        const result = await transactionsCollection.updateOne(
+          { transactionId },
+          { $set: { status: "Successful" } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ message: "Stripe payment successful." });
+        } else {
+          res.status(404).send({ error: "Transaction not found" });
+        }
+      } catch (error) {
+        console.error("Error updating payment status:", error);
+        res.status(500).send({ error: "Failed to update payment status" });
+      }
+    });
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
-
-
-
-
 
 run();
 
