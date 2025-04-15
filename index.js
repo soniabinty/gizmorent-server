@@ -5,7 +5,7 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY )
+const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -36,16 +36,50 @@ async function run() {
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    const  paymentsCollection = client.db('gizmorentdb').collection('payments')
-    const  ordersCollection = client.db('gizmorentdb').collection('orders')
+    const paymentsCollection = client.db("gizmorentdb").collection("payments");
+    const ordersCollection = client.db("gizmorentdb").collection("orders");
+
+    // admin
+    app.get("/users/admin/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // if (email !== req.decoded.email) {
+      //   return res.status(403).send({ message: "forbidden access" });
+      // }
+      const query = { email: email };
+
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+    // renter
+
+    app.get("/users/renter/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // if (email !== req.decoded.email) {
+      //   return res.status(403).send({ message: "forbidden access" });
+      // }
+      const query = { email: email };
+
+      const user = await userCollection.findOne(query);
+      let renter = false;
+      if (user) {
+        renter = user?.role === "renter";
+      }
+      res.send({ renter });
+    });
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
       const newGadget = req.body;
       newGadget.serialCode = `GR-${Date.now()
         .toString()
-        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
-        
+        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
+
       const result = await gadgetCollection.insertOne(newGadget);
       res.send(result);
     });
@@ -152,8 +186,8 @@ async function run() {
         res.send(result);
       } catch {
         res.status(500).send({ error: "Failed to fetch product" });
-      }
-    });
+      }
+    });
 
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
@@ -201,17 +235,13 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-
-      console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
-    
-   
+      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
 
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
       const renterCode =
         "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
-
 
       try {
         const result = await userCollection.updateOne(
@@ -233,8 +263,6 @@ async function run() {
           email,
           renterCode,
           createdAt: new Date(),
-
-
         });
 
         await rentalRequestCollection.deleteOne({ email });
@@ -246,14 +274,10 @@ async function run() {
       }
     });
 
-
-  
-
     //  renter rejection
 
     app.delete("/reject_renter/:email", async (req, res) => {
       const email = req.params.email;
-
 
       try {
         await rentalRequestCollection.deleteOne({ email });
@@ -285,7 +309,6 @@ async function run() {
     app.get("/user", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
-
     });
 
     // Get user data by email
@@ -308,9 +331,8 @@ async function run() {
         console.error("Error fetching user data:", error);
         res.status(500).send({ error: "Failed to fetch user data" });
       }
-
     });
-     
+
     // user post
     app.post("/users", async (req, res) => {
       const { name, email, password, photoURL } = req.body;
@@ -326,12 +348,13 @@ async function run() {
       res.send(result);
     });
 
-
     app.post("/update-password", async (req, res) => {
       const { email, newPassword } = req.body;
 
       if (!email || !newPassword) {
-        return res.status(400).send({ error: "Email and new password are required" });
+        return res
+          .status(400)
+          .send({ error: "Email and new password are required" });
       }
 
       try {
@@ -354,7 +377,6 @@ async function run() {
         res.status(500).send({ error: "Failed to update password" });
       }
     });
-
 
     app.patch("/users/:email", async (req, res) => {
       const email = req.params.email;
@@ -426,8 +448,6 @@ async function run() {
       }
     });
 
-
-
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
       try {
@@ -482,11 +502,10 @@ async function run() {
         res.status(500).json({ error: "Failed to delete item" });
       }
     });
-    
+
     // add cart list
     app.post("/cartlist", async (req, res) => {
       try {
-     
         const {
           gadgetId,
           name,
@@ -511,17 +530,16 @@ async function run() {
         res.status(500).send({ message: "Failed to add to cart" });
       }
     });
-     
+
     // get cart by email
     app.get("/cartlist", async (req, res) => {
       try {
-        const { email } = req.query; 
+        const { email } = req.query;
 
         if (!email) {
           return res.status(400).json({ error: "Email is required" });
         }
 
-       
         const cartItems = await cartlistCollection.find({ email }).toArray();
 
         if (cartItems.length === 0) {
@@ -530,7 +548,6 @@ async function run() {
             .json({ message: "No items found in the cart" });
         }
 
-        
         return res.status(200).json(cartItems);
       } catch (error) {
         console.error("Error fetching cart items:", error);
@@ -541,18 +558,17 @@ async function run() {
     // Remove from cart
     app.delete("/cartlist/:id", async (req, res) => {
       try {
-        const id = req.params.id; 
+        const id = req.params.id;
 
-     
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
 
-        const query = { _id: new ObjectId(id) }; 
+        const query = { _id: new ObjectId(id) };
         const result = await cartlistCollection.deleteOne(query);
 
         if (result.deletedCount > 0) {
-          return res.json({ deletedCount: 1, id }); 
+          return res.json({ deletedCount: 1, id });
         } else {
           return res.status(404).json({ error: "Item not found in cart" });
         }
@@ -563,37 +579,34 @@ async function run() {
           .json({ error: "Failed to delete item from cart" });
       }
     });
-  
+
     // update quantity
 
     app.patch("/cartlist/:id", async (req, res) => {
       try {
-        const id = req.params.id; 
-        const { quantity } = req.body; 
+        const id = req.params.id;
+        const { quantity } = req.body;
 
-      
         if (quantity <= 0 || isNaN(quantity)) {
           return res
             .status(400)
             .json({ error: "Quantity must be a positive number" });
         }
 
-        
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
 
-        const query = { _id: new ObjectId(id) }; 
+        const query = { _id: new ObjectId(id) };
         const updateDoc = {
-          $set: { quantity: quantity }, 
+          $set: { quantity: quantity },
         };
 
-        const result = await cartlistCollection.updateOne(query, updateDoc); 
+        const result = await cartlistCollection.updateOne(query, updateDoc);
 
         if (result.modifiedCount > 0) {
-         
-          const updatedItem = await cartlistCollection.findOne(query); 
-          return res.json(updatedItem); 
+          const updatedItem = await cartlistCollection.findOne(query);
+          return res.json(updatedItem);
         } else {
           return res.status(404).json({ error: "Item not found in cart" });
         }
@@ -607,62 +620,47 @@ async function run() {
 
     // payment intrigation
 
-app.post('/create-payment-intent', async (req, res) => {
-  const { price } = req.body;
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
 
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: price * 100, // Stripe expects the amount in cents
-      currency: 'usd',
-      payment_method_types: ['card'],
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: price * 100, // Stripe expects the amount in cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        console.error("Payment Intent Error:", error);
+
+        // Send more specific error messages based on the error type
+        if (error.type === "StripeCardError") {
+          res.status(400).send({ error: "Card error: " + error.message });
+        } else {
+          res.status(500).send({ error: "Internal Server Error" });
+        }
+      }
     });
 
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error("Payment Intent Error:", error);
+    app.post("/payments", async (req, res) => {
+      const paymentInfo = req.body;
 
-    // Send more specific error messages based on the error type
-    if (error.type === 'StripeCardError') {
-      res.status(400).send({ error: "Card error: " + error.message });
-    } else {
-      res.status(500).send({ error: "Internal Server Error" });
-    }
-  }
-});
+      const result = await paymentsCollection.insertOne(paymentInfo);
 
+      res.send(result);
+    });
 
+    app.post("/orders", async (req, res) => {
+      const orderData = req.body;
+      const result = await ordersCollection.insertOne(orderData);
 
-
-app.post("/payments", async (req, res) => {
-  const  paymentInfo = req.body
-
-
-    const result = await paymentsCollection.insertOne(paymentInfo);
-   
-    res.send(result);
-
-  
-});
-
-app.post("/orders", async (req, res) => {
-  const  orderData = req.body
-    const result = await ordersCollection.insertOne(orderData);
-  
-    res.send(result);
-
-  
-});
-
-
-  
+      res.send(result);
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
-
-
-
-
 
 run();
 
