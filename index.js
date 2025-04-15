@@ -695,6 +695,18 @@ app.patch("/orders/:id", async (req, res) => {
   }
 });
 
+app.get('/orders', async (req, res) => {
+  const email = req.query.email;
+  const orders = await Order.find({ customer_email: email });
+  
+  if (orders.length === 0) {
+    return res.status(404).json({ message: 'No orders found' });
+  }
+
+  return res.json(orders);
+});
+
+
 
   
   } catch (error) {
