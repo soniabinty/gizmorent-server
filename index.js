@@ -644,13 +644,55 @@ app.post("/payments", async (req, res) => {
   
 });
 
-app.post("/orders", async (req, res) => {
-  const  orderData = req.body
-    const result = await ordersCollection.insertOne(orderData);
-  
-    res.send(result);
+// order post
 
-  
+app.post("/orders", async (req, res) => {
+  const orderData = req.body; 
+
+  if (!Array.isArray(orderData)) {
+    return res.status(400).send({ error: "Expected an array of orders." });
+  }
+
+  try {
+    // Loop through the orderData array and insert each order one by one
+    const results = [];
+    for (const order of orderData) {
+      const result = await ordersCollection.insertOne(order);
+      results.push(result);
+    }
+    
+    // Send back the results of all insertions
+    res.send({ message: "Orders inserted successfully", results });
+  } catch (error) {
+    console.error("Order Save Error:", error);
+    res.status(500).send({ error: "Failed to save orders." });
+  }
+});
+
+// order get
+
+
+app.get("/orders", async (req, res) => {
+  const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
+  res.send({ requests: orders });
+});
+
+// order update
+
+app.patch("/orders/:id", async (req, res) => {
+  const orderId = req.params.id;
+  const { status } = req.body;
+
+  try {
+    const result = await ordersCollection.updateOne(
+      { _id: new ObjectId(orderId) },
+      { $set: { status: status } }
+    );
+    res.send(result);
+  } catch (error) {
+    console.error("Status update error:", error);
+    res.status(500).send({ error: "Failed to update status." });
+  }
 });
 
 
