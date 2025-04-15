@@ -37,6 +37,7 @@ async function run() {
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
     const  paymentsCollection = client.db('gizmorentdb').collection('payments')
+    const  ordersCollection = client.db('gizmorentdb').collection('orders')
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -604,11 +605,7 @@ async function run() {
       }
     });
 
-  } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
-  }
-}
-// payment intrigation
+    // payment intrigation
 
 app.post('/create-payment-intent', async (req, res) => {
   const { price } = req.body;
@@ -637,23 +634,85 @@ app.post('/create-payment-intent', async (req, res) => {
 
 
 app.post("/payments", async (req, res) => {
-  const { userId, email, amount, transactionId, date } = paymentInfo;
+  const  paymentInfo = req.body
 
-  // Check for missing data
-  if (!userId || !email || !transactionId || !amount || !date) {
-    return res.status(400).send({ error: "Missing payment data" });
-  }
-  console.log(paymentInfo)
-  try {
+
     const result = await paymentsCollection.insertOne(paymentInfo);
    
-    res.send({ success: result.insertedId ? true : false });
-  } catch (error) {
-    console.error("Error saving payment:", error);
-    res.status(500).send({ error: "Internal server error" });
-  }
+    res.send(result);
+
   
 });
+
+// order post
+
+app.post("/orders", async (req, res) => {
+  const orderData = req.body; 
+
+  if (!Array.isArray(orderData)) {
+    return res.status(400).send({ error: "Expected an array of orders." });
+  }
+
+  try {
+    // Loop through the orderData array and insert each order one by one
+    const results = [];
+    for (const order of orderData) {
+      const result = await ordersCollection.insertOne(order);
+      results.push(result);
+    }
+    
+    // Send back the results of all insertions
+    res.send({ message: "Orders inserted successfully", results });
+  } catch (error) {
+    console.error("Order Save Error:", error);
+    res.status(500).send({ error: "Failed to save orders." });
+  }
+});
+
+// order get
+
+
+app.get("/orders", async (req, res) => {
+  const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
+  res.send({ requests: orders });
+});
+
+// order update
+
+app.patch("/orders/:id", async (req, res) => {
+  const orderId = req.params.id;
+  const { status } = req.body;
+
+  try {
+    const result = await ordersCollection.updateOne(
+      { _id: new ObjectId(orderId) },
+      { $set: { status: status } }
+    );
+    res.send(result);
+  } catch (error) {
+    console.error("Status update error:", error);
+    res.status(500).send({ error: "Failed to update status." });
+  }
+});
+
+app.get('/orders', async (req, res) => {
+  const email = req.query.email;
+  const orders = await Order.find({ customer_email: email });
+  
+  if (orders.length === 0) {
+    return res.status(404).json({ message: 'No orders found' });
+  }
+
+  return res.json(orders);
+});
+
+
+
+  
+  } catch (error) {
+    console.error("Error connecting to MongoDB:", error);
+  }
+}
 
 
 
