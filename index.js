@@ -3,15 +3,14 @@ const cors = require("cors");
 require("dotenv").config();
 const axios = require("axios");
 const bcrypt = require("bcrypt");
-const SSLCommerzPayment = require("sslcommerz-lts");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
+const SSLCommerzPayment = require("sslcommerz-lts");
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 const store_id = process.env.store_id;
 const store_passwd = process.env.store_passwd;
-const is_live = false; // Set to true for production
-
+const is_live = false;
 app.use(cors());
 app.use(express.json());
 
@@ -30,36 +29,47 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
-    const wishlistedCollection = client.db("gizmorentdb").collection("wishlisted");
+    const wishlistedCollection = client
+      .db("gizmorentdb")
+      .collection("wishlisted");
     const reviewCollection = client.db("gizmorentdb").collection("review");
-    const rentalRequestCollection = client.db("gizmorentdb").collection("renter_request");
+    const rentalRequestCollection = client
+      .db("gizmorentdb")
+      .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
-
-    const transactionsCollection = client.db("gizmorentdb").collection("transactions");
-
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    // const paymentsCollection = client.db('gizmorentdb').collection('payments')
-
+    const paymentsCollection = client.db('gizmorentdb').collection('payments')
+    const ordersCollection = client.db('gizmorentdb').collection('orders')
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
       const newGadget = req.body;
+      newGadget.serialCode = `GR-${Date.now()
+        .toString()
+        .slice(-5)}-${Math.floor(Math.random() * 1000)}`;
+
       const result = await gadgetCollection.insertOne(newGadget);
       res.send(result);
     });
 
     // Get all gadgets
     app.get("/gadgets", async (req, res) => {
-
       const result = await gadgetCollection.find().toArray();
       res.send(result);
-
     });
 
     // gadgets filter and search
 
     app.get("/gadgets/search", async (req, res) => {
-      const { query, category, minPrice, maxPrice, sort, page = 1, limit = 6 } = req.query;
+      const {
+        query,
+        category,
+        minPrice,
+        maxPrice,
+        sort,
+        page = 1,
+        limit = 6,
+      } = req.query;
 
       const filter = {};
 
@@ -115,29 +125,78 @@ async function run() {
       }
     });
 
-
     // one gadget by id
-    app.get('/gadgets/:id', async (req, res) => {
+    app.get("/gadgets/:id", async (req, res) => {
       const id = req.params.id;
 
-
+      // Validate the gadget ID
       if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: 'Invalid gadget ID' });
+        return res.status(400).send({ error: "Invalid gadget ID" });
       }
 
       const query = { _id: new ObjectId(id) };
+
       try {
+        // Query the database for the gadget
         const result = await gadgetCollection.findOne(query);
+
         if (result) {
+          // Gadget found, send it in the response
           res.send(result);
         } else {
-          res.status(404).send({ error: 'Gadget not found' });
+          // Gadget not found, return a 404 error
+          res.status(404).send({ error: "Gadget not found" });
         }
       } catch (error) {
-        res.status(500).send({ error: 'Failed to fetch gadget' });
+        // Log the error for debugging purposes
+        console.error("Error fetching gadget:", error);
+
+        // Return a 500 Internal Server Error
+        res.status(500).send({ error: "Failed to fetch gadget" });
       }
     });
 
+    // Update a gadget by ID
+    app.put("/gadgets/:id", async (req, res) => {
+      const id = req.params.id;
+
+      // Validate the gadget ID
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid gadget ID" });
+      }
+
+      const updatedGadget = req.body;
+      const query = { _id: new ObjectId(id) };
+
+      try {
+        const result = await gadgetCollection.updateOne(query, { $set: updatedGadget });
+
+        if (result.matchedCount === 0) {
+          // If no gadget was found with the given ID
+          res.status(404).send({ error: "Gadget not found" });
+        } else {
+          // Gadget successfully updated
+          res.send({ message: "Gadget updated successfully", result });
+        }
+      } catch (error) {
+        // Log the error for debugging purposes
+        console.error("Error updating gadget:", error);
+
+        // Return a 500 Internal Server Error
+        res.status(500).send({ error: "Failed to update gadget" });
+      }
+    });
+
+    // one gadget by product code
+    app.get("/gadget/:serialCode", async (req, res) => {
+      const { serialCode } = req.params;
+      try {
+        const result = await gadgetCollection.findOne({ serialCode });
+        res.send(result);
+      } catch {
+        res.status(500).send({ error: "Failed to fetch product" });
+      }
+    });
 
     app.get("/product-review/:productId", async (req, res) => {
       const { productId } = req.params;
@@ -161,14 +220,15 @@ async function run() {
       }
     });
 
-
     // Add renter application
     app.post("/renter_request", async (req, res) => {
       const { email } = req.body;
       const existingRenter = await rentalRequestCollection.findOne({ email });
 
       if (existingRenter) {
-        res.status(400).send({ error: "You have already submitted a renter request." });
+        res
+          .status(400)
+          .send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
         const result = await rentalRequestCollection.insertOne(newRenter);
@@ -181,12 +241,19 @@ async function run() {
       res.send({ requests: result });
     });
 
-
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
+
       console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
 
+
+
+      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
+      const email = req.params.email;
+
+      const renterCode =
+        "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
 
 
       try {
@@ -210,6 +277,7 @@ async function run() {
           renterCode,
           createdAt: new Date(),
 
+
         });
 
         await rentalRequestCollection.deleteOne({ email });
@@ -223,6 +291,7 @@ async function run() {
 
 
 
+
     //  renter rejection
 
     app.delete("/reject_renter/:email", async (req, res) => {
@@ -232,23 +301,25 @@ async function run() {
       try {
         await rentalRequestCollection.deleteOne({ email });
 
-
         res.send({ message: "Renter request rejected" });
       } catch (error) {
         res.status(500).send({ error: "Failed to reject request" });
       }
     });
 
-
-
-
     // Register User
     app.post("/register", async (req, res) => {
       const { name, email, password, photoURL } = req.body;
       const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = { name, email, password: hashedPassword, photoURL, failedAttempts: 0, isLocked: false, role: 'user' };
-      const existing = await userCollection.findOne({ email });
-      if (existing) return res.status(400).send({ error: "User already exists" });
+      const newUser = {
+        name,
+        email,
+        password: hashedPassword,
+        photoURL,
+        failedAttempts: 0,
+        isLocked: false,
+        role: "user",
+      };
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
@@ -257,6 +328,7 @@ async function run() {
     app.get("/user", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
+
     });
 
     // Get user data by email
@@ -279,15 +351,24 @@ async function run() {
         console.error("Error fetching user data:", error);
         res.status(500).send({ error: "Failed to fetch user data" });
       }
+
     });
 
+    // user post
     app.post("/users", async (req, res) => {
       const { name, email, password, photoURL } = req.body;
       const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = { name, email, password: hashedPassword, photoURL, role: 'user' };
+      const newUser = {
+        name,
+        email,
+        password: hashedPassword,
+        photoURL,
+        role: "user",
+      };
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
+
 
     app.post("/update-password", async (req, res) => {
       const { email, newPassword } = req.body;
@@ -388,25 +469,45 @@ async function run() {
       }
     });
 
-    // Adding gadgets to wishlist
-    app.post('/wishlisted', async (req, res) => {
-      const newWish = req.body
-      const wish = await wishlistedCollection.insertOne(newWish)
-      res.send(wish)
-      console.log(wish)
 
-    })
 
-    app.get("/wishlisted", async (req, res) => {
+    // Adding wishlist
+    app.post("/wishlisted", async (req, res) => {
       try {
-        const result = await wishlistedCollection.find().toArray();
-        res.send(result);
-        console.log(result)
+        const { gadgetId, name, image, price, category, email } = req.body;
+
+        if (!gadgetId || !name || !price || !email) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+
+        const exists = await wishlistedCollection.findOne({ email, gadgetId });
+
+        if (exists) {
+          return res
+            .status(400)
+            .send({ message: "Gadget already in wishlist" });
+        }
+
+        const wish = await wishlistedCollection.insertOne(req.body);
+        res.status(201).send(wish);
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch gadgets" });
+        console.error("Wishlist error:", error);
+        res.status(500).send({ message: "Failed to add to wishlist" });
       }
     });
 
+    // get wishlist by email
+
+    app.get("/wishlisted", async (req, res) => {
+      try {
+        const { email } = req.query;
+        const query = email ? { email } : {};
+        const result = await wishlistedCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch wishlist" });
+      }
+    });
 
     // Delete from wishlist
     app.delete("/wishlisted/:id", async (req, res) => {
@@ -547,30 +648,58 @@ async function run() {
       }
     });
 
+    // payment intrigation
 
-    // Payment initiation
-    app.get("/initiate-payment", async (req, res) => {
-      const result = await transactionsCollection.find().toArray();
-      res.send(result);
-
-    })
-
-    app.get("/transactions", async (req, res) => {
-      const { status, paymentMethod } = req.query;
-
-      const filter = {};
-      if (status) filter.status = status;
-      if (paymentMethod) filter.paymentMethod = paymentMethod;
+    app.post('/create-payment-intent', async (req, res) => {
+      const { price } = req.body;
 
       try {
-        const transactions = await transactionsCollection.find(filter).toArray();
-        res.send(transactions);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: price * 100, // Stripe expects the amount in cents
+          currency: 'usd',
+          payment_method_types: ['card'],
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch transactions" });
+        console.error("Payment Intent Error:", error);
+
+        // Send more specific error messages based on the error type
+        if (error.type === 'StripeCardError') {
+          res.status(400).send({ error: "Card error: " + error.message });
+        } else {
+          res.status(500).send({ error: "Internal Server Error" });
+        }
       }
     });
 
-    app.post("/initiate-payment", async (req, res) => {
+    app.post("/payments", async (req, res) => {
+      const paymentInfo = req.body
+
+
+      const result = await paymentsCollection.insertOne(paymentInfo);
+
+      res.send(result);
+
+
+    });
+
+    app.post("/orders", async (req, res) => {
+      const orderData = req.body
+      const result = await ordersCollection.insertOne(orderData);
+
+      res.send(result);
+
+
+    });
+
+    app.get("/orders", async (req, res) => {
+      const result = await paymentsCollection.find().toArray();
+      res.send(result);
+    })
+
+    // SSLCommerz initiation
+    app.post("/sslcommerz-payment", async (req, res) => {
       const { total_amount, cus_name, cus_email, cus_phone } = req.body;
 
       // Add the required shipping_method field
@@ -578,7 +707,7 @@ async function run() {
         total_amount,
         currency: "USD",
         tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "http://localhost:5173/payment-success",
+        success_url: "http://localhost:5173/payment-success", // Add Like site Url 
         fail_url: "http://localhost:5173/payment-fail",
         cancel_url: "http://localhost:5173/payment-cancel",
         cus_name,
@@ -604,13 +733,11 @@ async function run() {
         console.log("SSLCommerz API Response", apiResponse);
 
         if (apiResponse && apiResponse.GatewayPageURL) {
-          await transactionsCollection.insertOne({
-            transactionId: paymentData.tran_id,
+          await paymentsCollection.insertOne({
+            email: cus_email,
             amount: total_amount,
-            paymentMethod: "SSLCommerz",
-            status: "Pending",
+            transactionId: paymentData.tran_id,
             date: new Date(),
-            customerDetails: { cus_name, cus_email, cus_phone },
           });
 
           res.send({ url: apiResponse.GatewayPageURL });
@@ -624,93 +751,14 @@ async function run() {
       }
     });
 
-    app.post("/payment-success", async (req, res) => {
-      const { tran_id, val_id } = req.body; // Include val_id from the payment gateway response
-
-      try {
-        // Step 1: Validate the transaction with SSLCommerz
-        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-        const validationResponse = await sslcz.validate({ val_id });
-
-        if (validationResponse.status !== "VALID") {
-          return res.status(400).send({ error: "Transaction validation failed" });
-        }
-
-        // Step 2: Update transaction in the database
-        const result = await transactionsCollection.updateOne(
-          { transactionId: tran_id },
-          {
-            $set: {
-              status: "Successful",
-              validationDetails: validationResponse,
-            },
-          }
-        );
-
-        if (result.modifiedCount > 0) {
-          res.send({ message: "Payment validated and success recorded." });
-        } else {
-          res.status(404).send({ error: "Transaction not found" });
-        }
-      } catch (error) {
-        console.error("Error validating transaction:", error);
-        res.status(500).send({ error: "Failed to validate transaction" });
-      }
-    });
-
-    // Stripe payment route
-    app.post("/create-payment-intent", async (req, res) => {
-      const { price, cus_name, cus_email } = req.body;
-
-      try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: price * 100, // Stripe expects the amount in cents
-          currency: "usd",
-          payment_method_types: ["card"],
-        });
-
-        // Save transaction in the unified collection
-        await transactionsCollection.insertOne({
-          transactionId: paymentIntent.id,
-          amount: price,
-          paymentMethod: "Stripe",
-          status: "Pending",
-          date: new Date(),
-          customerDetails: { cus_name, cus_email },
-        });
-
-        res.send({ clientSecret: paymentIntent.client_secret });
-      } catch (error) {
-        console.error("Payment Intent Error:", error);
-        res.status(500).send({ error: "Internal Server Error" });
-      }
-    });
-
-    // Stripe Webhook or Success Callback
-    app.post("/stripe-payment-success", async (req, res) => {
-      const { transactionId } = req.body;
-
-      try {
-        const result = await transactionsCollection.updateOne(
-          { transactionId },
-          { $set: { status: "Successful" } }
-        );
-
-        if (result.modifiedCount > 0) {
-          res.send({ message: "Stripe payment successful." });
-        } else {
-          res.status(404).send({ error: "Transaction not found" });
-        }
-      } catch (error) {
-        console.error("Error updating payment status:", error);
-        res.status(500).send({ error: "Failed to update payment status" });
-      }
-    });
-
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
+
+
+
+
 
 run();
 
