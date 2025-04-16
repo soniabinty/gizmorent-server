@@ -695,15 +695,20 @@ app.patch("/orders/:id", async (req, res) => {
   }
 });
 
-app.get('/orders', async (req, res) => {
-  const email = req.query.email;
-  const orders = await Order.find({ customer_email: email });
-  
-  if (orders.length === 0) {
-    return res.status(404).json({ message: 'No orders found' });
-  }
+// order by email
 
-  return res.json(orders);
+app.get("/orders/api", async (req, res) => {
+  const { email } = req.query;
+  const query = email ? { email } : {}; 
+ 
+
+  try {
+    const result = await ordersCollection.find(query).toArray();
+    res.send(result); 
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).send({ error: "Failed to fetch orders" });
+  }
 });
 
 
