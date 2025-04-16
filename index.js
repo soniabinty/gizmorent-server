@@ -5,7 +5,9 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+
 const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
+
 const app = express();
 const port = process.env.PORT || 5000;
 const SSLCommerzPayment = require("sslcommerz-lts");
@@ -39,8 +41,44 @@ async function run() {
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-    const paymentsCollection = client.db('gizmorentdb').collection('payments')
-    const ordersCollection = client.db('gizmorentdb').collection('orders')
+
+    const paymentsCollection = client.db("gizmorentdb").collection("payments");
+    const ordersCollection = client.db("gizmorentdb").collection("orders");
+
+    // admin
+    app.get("/users/admin/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // if (email !== req.decoded.email) {
+      //   return res.status(403).send({ message: "forbidden access" });
+      // }
+      const query = { email: email };
+
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+    // renter
+
+    app.get("/users/renter/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // if (email !== req.decoded.email) {
+      //   return res.status(403).send({ message: "forbidden access" });
+      // }
+      const query = { email: email };
+
+      const user = await userCollection.findOne(query);
+      let renter = false;
+      if (user) {
+        renter = user?.role === "renter";
+      }
+      res.send({ renter });
+    });
+
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -235,16 +273,12 @@ async function run() {
 
     app.patch("/approve_renter/:email", async (req, res) => {
 
-      console.log('Approving renter:', req.params.email); // Debug log to check the email being passed
-
-
 
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
       const renterCode =
         "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
-
 
       try {
         const result = await userCollection.updateOne(
@@ -266,8 +300,6 @@ async function run() {
           email,
           renterCode,
           createdAt: new Date(),
-
-
         });
 
         await rentalRequestCollection.deleteOne({ email });
@@ -279,14 +311,10 @@ async function run() {
       }
     });
 
-
-
-
     //  renter rejection
 
     app.delete("/reject_renter/:email", async (req, res) => {
       const email = req.params.email;
-
 
       try {
         await rentalRequestCollection.deleteOne({ email });
@@ -318,7 +346,6 @@ async function run() {
     app.get("/user", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
-
     });
 
     // Get user data by email
@@ -341,7 +368,6 @@ async function run() {
         console.error("Error fetching user data:", error);
         res.status(500).send({ error: "Failed to fetch user data" });
       }
-
     });
 
     // user post
@@ -359,12 +385,13 @@ async function run() {
       res.send(result);
     });
 
-
     app.post("/update-password", async (req, res) => {
       const { email, newPassword } = req.body;
 
       if (!email || !newPassword) {
-        return res.status(400).send({ error: "Email and new password are required" });
+        return res
+          .status(400)
+          .send({ error: "Email and new password are required" });
       }
 
       try {
@@ -387,7 +414,6 @@ async function run() {
         res.status(500).send({ error: "Failed to update password" });
       }
     });
-
 
     app.patch("/users/:email", async (req, res) => {
       const email = req.params.email;
@@ -458,8 +484,6 @@ async function run() {
         res.status(500).send({ error: "Failed to process Google login" });
       }
     });
-
-
 
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
@@ -554,7 +578,6 @@ async function run() {
           return res.status(400).json({ error: "Email is required" });
         }
 
-
         const cartItems = await cartlistCollection.find({ email }).toArray();
 
         if (cartItems.length === 0) {
@@ -562,7 +585,6 @@ async function run() {
             .status(404)
             .json({ message: "No items found in the cart" });
         }
-
 
         return res.status(200).json(cartItems);
       } catch (error) {
@@ -611,7 +633,6 @@ async function run() {
             .json({ error: "Quantity must be a positive number" });
         }
 
-
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
@@ -639,6 +660,7 @@ async function run() {
     });
 
     // payment intrigation
+
 
     app.post('/create-payment-intent', async (req, res) => {
       const { price } = req.body;
@@ -758,7 +780,7 @@ async function run() {
 
 
     app.get("/orders", async (req, res) => {
-      const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
+      const orders = await ordersCollection.find().toArray(); 
       res.send({ requests: orders });
     });
 
@@ -796,17 +818,11 @@ async function run() {
       }
     });
 
-
-
-
+    
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
 }
-
-
-
-
 
 run();
 
