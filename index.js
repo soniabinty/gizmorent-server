@@ -674,8 +674,6 @@ async function run() {
       }
     });
 
-    // order get
-
     app.get("/orders", async (req, res) => {
       const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
       res.send({ requests: orders });
@@ -697,6 +695,17 @@ async function run() {
         console.error("Status update error:", error);
         res.status(500).send({ error: "Failed to update status." });
       }
+    });
+
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      const orders = await Order.find({ customer_email: email });
+
+      if (orders.length === 0) {
+        return res.status(404).json({ message: "No orders found" });
+      }
+
+      return res.json(orders);
     });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
