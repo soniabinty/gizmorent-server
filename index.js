@@ -1,18 +1,17 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const axios = require("axios");
+
 const bcrypt = require("bcrypt");
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
-const SSLCommerzPayment = require("sslcommerz-lts");
 const app = express();
 const port = process.env.PORT || 5000;
-
+const SSLCommerzPayment = require("sslcommerz-lts");
 const store_id = process.env.store_id;
 const store_passwd = process.env.store_passwd;
 const is_live = false;
-
 app.use(cors());
 app.use(express.json());
 
@@ -730,7 +729,6 @@ async function run() {
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
-
     // order post
 
     app.post("/orders", async (req, res) => {
@@ -739,7 +737,6 @@ async function run() {
       if (!Array.isArray(orderData)) {
         return res.status(400).send({ error: "Expected an array of orders." });
       }
-
 
       try {
         // Loop through the orderData array and insert each order one by one
@@ -783,33 +780,21 @@ async function run() {
       }
     });
 
-    app.get('/orders', async (req, res) => {
-      const email = req.query.email;
-      const orders = await Order.find({ customer_email: email });
+    // order by email
 
-      if (orders.length === 0) {
-        return res.status(404).json({ message: 'No orders found' });
+    app.get("/orders/api", async (req, res) => {
+      const { email } = req.query;
+      const query = email ? { email } : {};
+
+
+      try {
+        const result = await ordersCollection.find(query).toArray();
+        res.send(result);
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+        res.status(500).send({ error: "Failed to fetch orders" });
       }
-
-      return res.json(orders);
     });
-
-
-// order by email
-
-app.get("/orders/api", async (req, res) => {
-  const { email } = req.query;
-  const query = email ? { email } : {}; 
- 
-
-  try {
-    const result = await ordersCollection.find(query).toArray();
-    res.send(result); 
-  } catch (err) {
-    console.error("Error fetching orders:", err);
-    res.status(500).send({ error: "Failed to fetch orders" });
-  }
-});
 
 
 
