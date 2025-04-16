@@ -740,6 +740,7 @@ async function run() {
         return res.status(400).send({ error: "Expected an array of orders." });
       }
 
+
       try {
         // Loop through the orderData array and insert each order one by one
         const results = [];
@@ -792,6 +793,23 @@ async function run() {
 
       return res.json(orders);
     });
+
+
+// order by email
+
+app.get("/orders/api", async (req, res) => {
+  const { email } = req.query;
+  const query = email ? { email } : {}; 
+ 
+
+  try {
+    const result = await ordersCollection.find(query).toArray();
+    res.send(result); 
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).send({ error: "Failed to fetch orders" });
+  }
+});
 
 
 
