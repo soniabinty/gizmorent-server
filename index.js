@@ -448,6 +448,61 @@ async function run() {
       }
     });
 
+    // new users statistics
+
+    app.get("/new-users", async (req, res) => {
+      try {
+        const allUsers = await userCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .toArray();
+
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+        const addedLastMonth = await userCollection.countDocuments({
+          createdAt: { $gte: lastMonth },
+        });
+
+        const totalNewUsers = await userCollection.countDocuments();
+
+        // Group users by day of week
+        const chartData = await userCollection
+          .aggregate([
+            {
+              $match: { createdAt: { $gte: lastMonth } },
+            },
+            {
+              $group: {
+                _id: { $dayOfWeek: "$createdAt" },
+                users: { $sum: 1 },
+              },
+            },
+            {
+              $sort: { _id: 1 },
+            },
+          ])
+          .toArray();
+
+        // Convert to day names for chart
+        const dayMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const formattedChart = chartData.map((item) => ({
+          day: dayMap[item._id - 1],
+          users: item.users,
+        }));
+
+        res.json({
+          users: allUsers,
+          addedLastMonth,
+          totalNewUsers,
+          chart: formattedChart,
+        });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch users" });
+      }
+    });
+
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
       try {
@@ -651,6 +706,79 @@ async function run() {
       res.send(result);
     });
 
+    // get payment
+
+    app.get("/payments", async (req, res) => {
+      const payment = await paymentsCollection.find().toArray();
+      res.send(payment);
+    });
+
+    // recent payment
+
+    app.get("/recent-payment", async (req, res) => {
+      try {
+        const cursor = paymentsCollection.find().sort({ date: -1 }).limit(5);
+
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent payments:", error);
+        res.status(500).send({ message: "Failed to fetch recent payments" });
+      }
+    });
+
+    // SSLCommerz initiation
+    app.post("/sslcommerz-payment", async (req, res) => {
+      const { total_amount, cus_name, cus_email, cus_phone } = req.body;
+
+      // Add the required shipping_method field
+      const paymentData = {
+        total_amount,
+        currency: "USD",
+        tran_id: `TRX_${Date.now()}`, // Unique transaction ID
+        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url
+        fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
+        cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
+        cus_name,
+        cus_email,
+        cus_phone,
+        shipping_method: "Courier",
+        product_name: "Gadget Rent",
+        product_category: "Rental",
+        product_profile: "general",
+        ship_name: cus_name,
+        ship_add1: "Dhaka",
+        ship_add2: "Dhaka",
+        ship_city: "Dhaka",
+        ship_state: "Dhaka",
+        ship_postcode: "1000",
+        ship_country: "Bangladesh",
+      };
+
+      try {
+        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+        const apiResponse = await sslcz.init(paymentData);
+
+        if (apiResponse && apiResponse.GatewayPageURL) {
+          await paymentsCollection.insertOne({
+            email: cus_email,
+            amount: total_amount,
+            transactionId: paymentData.tran_id,
+            date: new Date(),
+          });
+
+          res.send({ url: apiResponse.GatewayPageURL });
+        } else {
+          console.log("Failed to get payment gateway URL");
+          res.status(500).send({ error: "Failed to get payment gateway URL" });
+        }
+      } catch (error) {
+        console.log("SSLCommerz Error", { error: error.message });
+        res.status(500).send({ error: "Payment initiation failed" });
+      }
+    });
+    // order post
+
     app.post("/orders", async (req, res) => {
       const orderData = req.body;
 
@@ -706,6 +834,19 @@ async function run() {
       }
 
       return res.json(orders);
+    });
+    // recent order
+
+    app.get("/recent-Order", async (req, res) => {
+      try {
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
+
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent orders:", error);
+        res.status(500).send({ message: "Failed to fetch recent orders" });
+      }
     });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
