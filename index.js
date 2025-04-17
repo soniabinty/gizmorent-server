@@ -700,6 +700,27 @@ async function run() {
 
     });
 
+    // get payment
+
+
+    app.get("/payments", async (req, res) => {
+      const payment = await paymentsCollection.find().toArray();
+      res.send(payment);
+    });
+
+    // recent payment
+
+    app.get('/recent-payment', async (req, res) => {
+      try {
+        const cursor = paymentsCollection.find().sort({ date: -1 }).limit(5);
+
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent payments:", error);
+        res.status(500).send({ message: "Failed to fetch recent payments" });
+      }
+    });
 
     // SSLCommerz initiation
     app.post("/sslcommerz-payment", async (req, res) => {
@@ -840,22 +861,6 @@ async function run() {
       }
     });
 
-    // Get the latest 5 reviews for a user
-    app.get("/reviews", async (req, res) => {
-      const { userId } = req.params;
-
-      try {
-        const reviews = await websitereviewCollection
-          .find({ userId })
-          .sort({ timestamp: -1 })
-          .limit(5)
-          .toArray();
-        res.send(reviews);
-      } catch (error) {
-        console.error("Error fetching reviews:", error);
-        res.status(500).send({ error: "Failed to fetch reviews" });
-      }
-    });
 
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
