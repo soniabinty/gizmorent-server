@@ -699,6 +699,13 @@ async function run() {
 
     });
 
+// get payment
+
+
+app.get("/payments", async (req, res) => {
+  const payment = await paymentsCollection.find().toArray(); 
+  res.send(payment);
+});
 
     // SSLCommerz initiation
     app.post("/sslcommerz-payment", async (req, res) => {
@@ -818,7 +825,22 @@ async function run() {
       }
     });
 
+    // recent order
     
+    app.get('/recent-Order', async (req, res) => {
+      try {
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);  
+        
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent orders:", error);
+        res.status(500).send({ message: "Failed to fetch recent orders" });
+      }
+    });
+    
+
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
