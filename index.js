@@ -707,6 +707,20 @@ app.get("/payments", async (req, res) => {
   res.send(payment);
 });
 
+// recent payment
+
+    app.get('/recent-payment', async (req, res) => {
+      try {
+        const cursor = paymentsCollection.find().sort({ date: -1 }).limit(5);  
+        
+       const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent payments:", error);
+        res.status(500).send({ message: "Failed to fetch recent payments" });
+      }
+    });
+
     // SSLCommerz initiation
     app.post("/sslcommerz-payment", async (req, res) => {
       const { total_amount, cus_name, cus_email, cus_phone } = req.body;
@@ -838,6 +852,7 @@ app.get("/payments", async (req, res) => {
         res.status(500).send({ message: "Failed to fetch recent orders" });
       }
     });
+
     
 
 
