@@ -44,6 +44,7 @@ async function run() {
 
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
+    const websitereviewCollection = client.db("gizmorentdb").collection("websitereview");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -751,6 +752,7 @@ async function run() {
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
+
     // order post
 
     app.post("/orders", async (req, res) => {
@@ -780,7 +782,7 @@ async function run() {
 
 
     app.get("/orders", async (req, res) => {
-      const orders = await ordersCollection.find().toArray(); 
+      const orders = await ordersCollection.find().toArray();
       res.send({ requests: orders });
     });
 
@@ -818,7 +820,48 @@ async function run() {
       }
     });
 
-    
+
+    // Add a user review
+    app.post("/reviews", async (req, res) => {
+      const review = req.body;
+
+      if (!review.userId || !review.comment) {
+        return res.status(400).send({ error: "UserId and comment are required" });
+      }
+
+      review.timestamp = new Date(); // Add a timestamp for the review
+
+      try {
+        const result = await websitereviewCollection.insertOne(review);
+        res.send({ message: "Review added successfully", result });
+      } catch (error) {
+        console.error("Error adding review:", error);
+        res.status(500).send({ error: "Failed to add review" });
+      }
+    });
+
+    // Get the latest 5 reviews for a user
+    app.get("/reviews", async (req, res) => {
+      const { userId } = req.params;
+
+      try {
+        const reviews = await websitereviewCollection
+          .find({ userId })
+          .sort({ timestamp: -1 })
+          .limit(5)
+          .toArray();
+        res.send(reviews);
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        res.status(500).send({ error: "Failed to fetch reviews" });
+      }
+    });
+
+    app.get("/websitereview", async (req, res) => {
+      const reviews = await websitereviewCollection.find().toArray();
+      res.send(reviews);
+    })
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
