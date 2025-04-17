@@ -5,15 +5,10 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
-
+const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
 const app = express();
 const port = process.env.PORT || 5000;
-const SSLCommerzPayment = require("sslcommerz-lts");
-const store_id = process.env.store_id;
-const store_passwd = process.env.store_passwd;
-const is_live = false;
+
 app.use(cors());
 app.use(express.json());
 
@@ -41,7 +36,6 @@ async function run() {
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
 
@@ -78,7 +72,6 @@ async function run() {
       }
       res.send({ renter });
     });
-
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -185,36 +178,6 @@ async function run() {
       }
     });
 
-    app.put("/gadgets/:id", async (req, res) => {
-      const id = req.params.id;
-
-      // Validate the gadget ID
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: "Invalid gadget ID" });
-      }
-
-      const updatedGadget = req.body;
-      const query = { _id: new ObjectId(id) };
-
-      try {
-        const result = await gadgetCollection.updateOne(query, { $set: updatedGadget });
-
-        if (result.matchedCount === 0) {
-          // If no gadget was found with the given ID
-          res.status(404).send({ error: "Gadget not found" });
-        } else {
-          // Gadget successfully updated
-          res.send({ message: "Gadget updated successfully", result });
-        }
-      } catch (error) {
-        // Log the error for debugging purposes
-        console.error("Error updating gadget:", error);
-
-        // Return a 500 Internal Server Error
-        res.status(500).send({ error: "Failed to update gadget" });
-      }
-    });
-
     // one gadget by product code
     app.get("/gadget/:serialCode", async (req, res) => {
       const { serialCode } = req.params;
@@ -272,7 +235,7 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-
+      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
 
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
@@ -543,7 +506,6 @@ async function run() {
     // add cart list
     app.post("/cartlist", async (req, res) => {
       try {
-
         const {
           gadgetId,
           name,
@@ -598,7 +560,6 @@ async function run() {
       try {
         const id = req.params.id;
 
-
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
@@ -626,7 +587,6 @@ async function run() {
         const id = req.params.id;
         const { quantity } = req.body;
 
-
         if (quantity <= 0 || isNaN(quantity)) {
           return res
             .status(400)
@@ -645,7 +605,6 @@ async function run() {
         const result = await cartlistCollection.updateOne(query, updateDoc);
 
         if (result.modifiedCount > 0) {
-
           const updatedItem = await cartlistCollection.findOne(query);
           return res.json(updatedItem);
         } else {
@@ -661,15 +620,14 @@ async function run() {
 
     // payment intrigation
 
-
-    app.post('/create-payment-intent', async (req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
 
       try {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: price * 100, // Stripe expects the amount in cents
-          currency: 'usd',
-          payment_method_types: ['card'],
+          currency: "usd",
+          payment_method_types: ["card"],
         });
 
         res.send({ clientSecret: paymentIntent.client_secret });
@@ -677,7 +635,7 @@ async function run() {
         console.error("Payment Intent Error:", error);
 
         // Send more specific error messages based on the error type
-        if (error.type === 'StripeCardError') {
+        if (error.type === "StripeCardError") {
           res.status(400).send({ error: "Card error: " + error.message });
         } else {
           res.status(500).send({ error: "Internal Server Error" });
@@ -685,73 +643,13 @@ async function run() {
       }
     });
 
-
-
-
     app.post("/payments", async (req, res) => {
-      const paymentInfo = req.body
-
+      const paymentInfo = req.body;
 
       const result = await paymentsCollection.insertOne(paymentInfo);
 
       res.send(result);
-
-
     });
-
-
-    // SSLCommerz initiation
-    app.post("/sslcommerz-payment", async (req, res) => {
-      const { total_amount, cus_name, cus_email, cus_phone } = req.body;
-
-      // Add the required shipping_method field
-      const paymentData = {
-        total_amount,
-        currency: "USD",
-        tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
-        fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
-        cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
-        cus_name,
-        cus_email,
-        cus_phone,
-        shipping_method: "Courier",
-        product_name: "Gadget Rent",
-        product_category: "Rental",
-        product_profile: "general",
-        ship_name: cus_name,
-        ship_add1: "Dhaka",
-        ship_add2: "Dhaka",
-        ship_city: "Dhaka",
-        ship_state: "Dhaka",
-        ship_postcode: "1000",
-        ship_country: "Bangladesh",
-      };
-
-      try {
-        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-        const apiResponse = await sslcz.init(paymentData);
-
-
-        if (apiResponse && apiResponse.GatewayPageURL) {
-          await paymentsCollection.insertOne({
-            email: cus_email,
-            amount: total_amount,
-            transactionId: paymentData.tran_id,
-            date: new Date(),
-          });
-
-          res.send({ url: apiResponse.GatewayPageURL });
-        } else {
-          console.log("Failed to get payment gateway URL");
-          res.status(500).send({ error: "Failed to get payment gateway URL" });
-        }
-      } catch (error) {
-        console.log("SSLCommerz Error", { error: error.message });
-        res.status(500).send({ error: "Payment initiation failed" });
-      }
-    });
-    // order post
 
     app.post("/orders", async (req, res) => {
       const orderData = req.body;
@@ -776,11 +674,8 @@ async function run() {
       }
     });
 
-    // order get
-
-
     app.get("/orders", async (req, res) => {
-      const orders = await ordersCollection.find().toArray(); 
+      const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
       res.send({ requests: orders });
     });
 
@@ -802,23 +697,16 @@ async function run() {
       }
     });
 
-    // order by email
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      const orders = await Order.find({ customer_email: email });
 
-    app.get("/orders/api", async (req, res) => {
-      const { email } = req.query;
-      const query = email ? { email } : {};
-
-
-      try {
-        const result = await ordersCollection.find(query).toArray();
-        res.send(result);
-      } catch (err) {
-        console.error("Error fetching orders:", err);
-        res.status(500).send({ error: "Failed to fetch orders" });
+      if (orders.length === 0) {
+        return res.status(404).json({ message: "No orders found" });
       }
-    });
 
-    
+      return res.json(orders);
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
