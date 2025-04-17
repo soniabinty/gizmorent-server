@@ -848,6 +848,60 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch recent orders" });
       }
     });
+
+    // monthly order stats
+    app.get("/monthly-order", async (req, res) => {
+      try {
+        const result = await ordersCollection
+          .aggregate([
+            {
+              $addFields: {
+                orderDate: { $toDate: "$date" },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$orderDate" },
+                total: { $sum: "$amount" },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+          .toArray();
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const allMonths = monthNames.map((month) => ({
+          name: month,
+          value: 0,
+        }));
+
+        result.forEach((item) => {
+          const index = item._id - 1;
+          if (index >= 0 && index < 12) {
+            allMonths[index].value = item.total;
+          }
+        });
+
+        res.send(allMonths);
+      } catch (error) {
+        console.error("Error fetching monthly sales:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
