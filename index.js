@@ -38,6 +38,7 @@ async function run() {
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
+    const websitereviewCollection = client.db("gizmorentdb").collection("websitereview");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -708,6 +709,7 @@ async function run() {
 
     // get payment
 
+
     app.get("/payments", async (req, res) => {
       const payment = await paymentsCollection.find().toArray();
       res.send(payment);
@@ -777,6 +779,7 @@ async function run() {
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
+
     // order post
 
     app.post("/orders", async (req, res) => {
@@ -803,7 +806,9 @@ async function run() {
     });
 
     app.get("/orders", async (req, res) => {
-      const orders = await ordersCollection.find().toArray(); // <-- Make sure this collection exists
+
+      const orders = await ordersCollection.find().toArray();
+
       res.send({ requests: orders });
     });
 
@@ -833,19 +838,40 @@ async function run() {
         return res.status(404).json({ message: "No orders found" });
       }
 
+
       return res.json(orders);
     });
     // recent order
 
-    app.get("/recent-Order", async (req, res) => {
+     app.get('/recent-Order', async (req, res) => {
       try {
-        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
-
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);  
+        
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
         console.error("Error fetching recent orders:", error);
         res.status(500).send({ message: "Failed to fetch recent orders" });
+      }
+    });
+
+
+    // Add a user review
+    app.post("/reviews", async (req, res) => {
+      const review = req.body;
+
+      if (!review.userId || !review.comment) {
+        return res.status(400).send({ error: "UserId and comment are required" });
+      }
+
+      review.timestamp = new Date(); // Add a timestamp for the review
+
+      try {
+        const result = await websitereviewCollection.insertOne(review);
+
+      } catch (error) {
+        console.error("Error adding review:", error);
+        res.status(500).send({ error: "Failed to add review" });
       }
     });
 
@@ -902,6 +928,12 @@ async function run() {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
+//     review get
+        
+    app.get("/websitereview", async (req, res) => {
+      const reviews = await websitereviewCollection.find().toArray();
+      res.send(reviews);
+    })
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
