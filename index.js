@@ -837,10 +837,23 @@ async function run() {
         res.send(result);
       } catch (err) {
         console.error("Error fetching orders:", err);
-        res.status(500).send({ error: "Failed to fetch orders" });
+        res.status(500).send({ error: "Failed to fetch the orders" });
       }
     });
 
+    // recent order
+
+    app.get("/recent-Order", async (req, res) => {
+      try {
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
+
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching recent orders:", error);
+        res.status(500).send({ message: "Failed to fetch recent orders" });
+      }
+    });
 
     // Add a user review
     app.post("/reviews", async (req, res) => {
