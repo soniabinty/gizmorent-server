@@ -6,7 +6,7 @@ const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
-const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
+const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -44,7 +44,9 @@ async function run() {
 
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
-    const websitereviewCollection = client.db("gizmorentdb").collection("websitereview");
+    const websitereviewCollection = client
+      .db("gizmorentdb")
+      .collection("websitereview");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -79,7 +81,6 @@ async function run() {
       }
       res.send({ renter });
     });
-
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -198,7 +199,9 @@ async function run() {
       const query = { _id: new ObjectId(id) };
 
       try {
-        const result = await gadgetCollection.updateOne(query, { $set: updatedGadget });
+        const result = await gadgetCollection.updateOne(query, {
+          $set: updatedGadget,
+        });
 
         if (result.matchedCount === 0) {
           // If no gadget was found with the given ID
@@ -273,8 +276,6 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-
-
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
@@ -486,6 +487,61 @@ async function run() {
       }
     });
 
+    // new users statistics
+
+    app.get("/new-users", async (req, res) => {
+      try {
+        const allUsers = await userCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .toArray();
+
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+        const addedLastMonth = await userCollection.countDocuments({
+          createdAt: { $gte: lastMonth },
+        });
+
+        const totalNewUsers = await userCollection.countDocuments();
+
+        // Group users by day of week
+        const chartData = await userCollection
+          .aggregate([
+            {
+              $match: { createdAt: { $gte: lastMonth } },
+            },
+            {
+              $group: {
+                _id: { $dayOfWeek: "$createdAt" },
+                users: { $sum: 1 },
+              },
+            },
+            {
+              $sort: { _id: 1 },
+            },
+          ])
+          .toArray();
+
+        // Convert to day names for chart
+        const dayMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const formattedChart = chartData.map((item) => ({
+          day: dayMap[item._id - 1],
+          users: item.users,
+        }));
+
+        res.json({
+          users: allUsers,
+          addedLastMonth,
+          totalNewUsers,
+          chart: formattedChart,
+        });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch users" });
+      }
+    });
+
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
       try {
@@ -544,7 +600,6 @@ async function run() {
     // add cart list
     app.post("/cartlist", async (req, res) => {
       try {
-
         const {
           gadgetId,
           name,
@@ -599,7 +654,6 @@ async function run() {
       try {
         const id = req.params.id;
 
-
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
@@ -627,7 +681,6 @@ async function run() {
         const id = req.params.id;
         const { quantity } = req.body;
 
-
         if (quantity <= 0 || isNaN(quantity)) {
           return res
             .status(400)
@@ -646,7 +699,6 @@ async function run() {
         const result = await cartlistCollection.updateOne(query, updateDoc);
 
         if (result.modifiedCount > 0) {
-
           const updatedItem = await cartlistCollection.findOne(query);
           return res.json(updatedItem);
         } else {
@@ -662,15 +714,14 @@ async function run() {
 
     // payment intrigation
 
-
-    app.post('/create-payment-intent', async (req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
 
       try {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: price * 100, // Stripe expects the amount in cents
-          currency: 'usd',
-          payment_method_types: ['card'],
+          currency: "usd",
+          payment_method_types: ["card"],
         });
 
         res.send({ clientSecret: paymentIntent.client_secret });
@@ -678,7 +729,7 @@ async function run() {
         console.error("Payment Intent Error:", error);
 
         // Send more specific error messages based on the error type
-        if (error.type === 'StripeCardError') {
+        if (error.type === "StripeCardError") {
           res.status(400).send({ error: "Card error: " + error.message });
         } else {
           res.status(500).send({ error: "Internal Server Error" });
@@ -686,22 +737,15 @@ async function run() {
       }
     });
 
-
-
-
     app.post("/payments", async (req, res) => {
-      const paymentInfo = req.body
-
+      const paymentInfo = req.body;
 
       const result = await paymentsCollection.insertOne(paymentInfo);
 
       res.send(result);
-
-
     });
 
     // get payment
-
 
     app.get("/payments", async (req, res) => {
       const payment = await paymentsCollection.find().toArray();
@@ -710,7 +754,7 @@ async function run() {
 
     // recent payment
 
-    app.get('/recent-payment', async (req, res) => {
+    app.get("/recent-payment", async (req, res) => {
       try {
         const cursor = paymentsCollection.find().sort({ date: -1 }).limit(5);
 
@@ -731,7 +775,7 @@ async function run() {
         total_amount,
         currency: "USD",
         tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
+        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url
         fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
         cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
         cus_name,
@@ -753,7 +797,6 @@ async function run() {
       try {
         const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
         const apiResponse = await sslcz.init(paymentData);
-
 
         if (apiResponse && apiResponse.GatewayPageURL) {
           await paymentsCollection.insertOne({
@@ -801,7 +844,6 @@ async function run() {
 
     // order get
 
-
     app.get("/orders", async (req, res) => {
       const orders = await ordersCollection.find().toArray();
       res.send({ requests: orders });
@@ -831,7 +873,6 @@ async function run() {
       const { email } = req.query;
       const query = email ? { email } : {};
 
-
       try {
         const result = await ordersCollection.find(query).toArray();
         res.send(result);
@@ -855,12 +896,68 @@ async function run() {
       }
     });
 
+    // monthly order stats
+    app.get("/monthly-order", async (req, res) => {
+      try {
+        const result = await ordersCollection
+          .aggregate([
+            {
+              $addFields: {
+                orderDate: { $toDate: "$date" },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$orderDate" },
+                total: { $sum: "$amount" },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+          .toArray();
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const allMonths = monthNames.map((month) => ({
+          name: month,
+          value: 0,
+        }));
+
+        result.forEach((item) => {
+          const index = item._id - 1;
+          if (index >= 0 && index < 12) {
+            allMonths[index].value = item.total;
+          }
+        });
+
+        res.send(allMonths);
+      } catch (error) {
+        console.error("Error fetching monthly sales:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
     // Add a user review
     app.post("/reviews", async (req, res) => {
       const review = req.body;
 
       if (!review.userId || !review.comment) {
-        return res.status(400).send({ error: "UserId and comment are required" });
+        return res
+          .status(400)
+          .send({ error: "UserId and comment are required" });
       }
 
       review.timestamp = new Date(); // Add a timestamp for the review
@@ -874,12 +971,10 @@ async function run() {
       }
     });
 
-
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
-    })
-
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
