@@ -47,6 +47,9 @@ async function run() {
     const websitereviewCollection = client
       .db("gizmorentdb")
       .collection("websitereview");
+    const renterGadgetCollection = client
+      .db("gizmorentdb")
+      .collection("renter-gadgets");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -239,6 +242,31 @@ async function run() {
       } catch {
         res.status(500).send({ error: "Failed to fetch reviews" });
       }
+    });
+
+    // renter gadget
+
+    app.post("/renter-gadgets", async (req, res) => {
+      const renterGadget = req.body;
+      const result = await renterGadgetCollection.insertOne(renterGadget);
+      res.send(result);
+    });
+    // get renter gadgets
+    app.get("/renter-gadgets", async (req, res) => {
+      const { status } = req.query;
+      const query = status ? { status } : {};
+      const result = await renterGadgetCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.put("/renter-gadgets/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedGadget = req.body;
+      delete updatedGadget._id;
+      const result = await renterGadgetCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedGadget }
+      );
+      res.send(result);
     });
 
     // review post
