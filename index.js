@@ -355,6 +355,20 @@ async function run() {
       }
     });
 
+
+    // getting all renter
+    app.get("/renter", async (req, res) => {
+      try {
+        const renters = await userCollection.find({ role: "renter" }).toArray();
+        res.send(renters);
+      } catch (error) {
+        console.error("Error fetching renters:", error);
+        res.status(500).send({ error: "Failed to fetch renters" });
+      }
+    });
+    
+
+
     // Register User
     app.post("/register", async (req, res) => {
       const { name, email, password, photoURL } = req.body;
@@ -878,7 +892,7 @@ async function run() {
       res.send({ requests: orders });
     });
 
-
+// renter earning
    
     app.get("/renter-orders-summary/:renterId", async (req, res) => {
       const renterId = req.params.renterId;
@@ -888,7 +902,7 @@ async function run() {
     
         const totalOrders = orders.length;
     
-        // Adjust this line depending on what your price field is
+     
         const totalRevenue = orders.reduce((sum, order) => {
           const price = Number(order.price || order.amount || order.totalPrice || 0);
           return sum + price;
