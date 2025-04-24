@@ -10,10 +10,8 @@ const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
 
 const app = express();
 const port = process.env.PORT || 5000;
-const SSLCommerzPayment = require("sslcommerz-lts");
-const store_id = process.env.store_id;
-const store_passwd = process.env.store_passwd;
-const is_live = false;
+const initiateSSLCommerzPayment = require("./services/sslcommerzPayment");
+
 app.use(cors());
 app.use(express.json());
 
@@ -215,6 +213,35 @@ async function run() {
         res.status(500).send({ error: "Failed to update gadget" });
       }
     });
+
+    app.delete("/gadgets/:id", async (req, res) => {
+      const id = req.params.id;
+
+      // Validate the gadget ID
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid gadget ID" });
+      }
+
+      const query = { _id: new ObjectId(id) };
+
+      try {
+        const result = await gadgetCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          // If no gadget was found with the given ID
+          res.status(404).send({ error: "Gadget not found" });
+        } else {
+          // Gadget successfully deleted
+          res.send({ message: "Gadget deleted successfully", result });
+        }
+      } catch (error) {
+        // Log the error for debugging purposes
+        console.error("Error deleting gadget:", error);
+
+        // Return a 500 Internal Server Error
+        res.status(500).send({ error: "Failed to delete gadget" });
+      }
+    })
 
     // one gadget by product code
     app.get("/gadget/:serialCode", async (req, res) => {
@@ -723,53 +750,63 @@ async function run() {
     });
 
     // SSLCommerz initiation
+    // app.post("/sslcommerz-payment", async (req, res) => {
+    //   const { total_amount, cus_name, cus_email, cus_phone } = req.body;
+
+    //   // Add the required shipping_method field
+    //   const paymentData = {
+    //     total_amount,
+    //     currency: "USD",
+    //     tran_id: `TRX_${Date.now()}`, // Unique transaction ID
+    //     success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
+    //     fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
+    //     cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
+    //     cus_name,
+    //     cus_email,
+    //     cus_phone,
+    //     shipping_method: "Courier",
+    //     product_name: "Gadget Rent",
+    //     product_category: "Rental",
+    //     product_profile: "general",
+    //     ship_name: cus_name,
+    //     ship_add1: "Dhaka",
+    //     ship_add2: "Dhaka",
+    //     ship_city: "Dhaka",
+    //     ship_state: "Dhaka",
+    //     ship_postcode: "1000",
+    //     ship_country: "Bangladesh",
+    //   };
+
+    //   try {
+    //     const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
+    //     const apiResponse = await sslcz.init(paymentData);
+
+
+    //     if (apiResponse && apiResponse.GatewayPageURL) {
+    //       await paymentsCollection.insertOne({
+    //         email: cus_email,
+    //         amount: total_amount,
+    //         transactionId: paymentData.tran_id,
+    //         date: new Date(),
+    //       });
+
+    //       res.send({ url: apiResponse.GatewayPageURL });
+    //     } else {
+    //       console.log("Failed to get payment gateway URL");
+    //       res.status(500).send({ error: "Failed to get payment gateway URL" });
+    //     }
+    //   } catch (error) {
+    //     console.log("SSLCommerz Error", { error: error.message });
+    //     res.status(500).send({ error: "Payment initiation failed" });
+    //   }
+    // });
+
     app.post("/sslcommerz-payment", async (req, res) => {
-      const { total_amount, cus_name, cus_email, cus_phone } = req.body;
-
-      // Add the required shipping_method field
-      const paymentData = {
-        total_amount,
-        currency: "USD",
-        tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-        success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
-        fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
-        cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
-        cus_name,
-        cus_email,
-        cus_phone,
-        shipping_method: "Courier",
-        product_name: "Gadget Rent",
-        product_category: "Rental",
-        product_profile: "general",
-        ship_name: cus_name,
-        ship_add1: "Dhaka",
-        ship_add2: "Dhaka",
-        ship_city: "Dhaka",
-        ship_state: "Dhaka",
-        ship_postcode: "1000",
-        ship_country: "Bangladesh",
-      };
-
       try {
-        const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-        const apiResponse = await sslcz.init(paymentData);
-
-
-        if (apiResponse && apiResponse.GatewayPageURL) {
-          await paymentsCollection.insertOne({
-            email: cus_email,
-            amount: total_amount,
-            transactionId: paymentData.tran_id,
-            date: new Date(),
-          });
-
-          res.send({ url: apiResponse.GatewayPageURL });
-        } else {
-          console.log("Failed to get payment gateway URL");
-          res.status(500).send({ error: "Failed to get payment gateway URL" });
-        }
+        const result = await initiateSSLCommerzPayment(req, paymentsCollection);
+        res.send(result);
       } catch (error) {
-        console.log("SSLCommerz Error", { error: error.message });
+        console.error("SSLCommerz Error:", error.message);
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
