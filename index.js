@@ -5,12 +5,11 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-const stripe = require('stripe')(process.env.STRIPE_ACCESS_KEY)
-
+const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
 const app = express();
 const port = process.env.PORT || 5000;
 const initiateSSLCommerzPayment = require("./services/sslcommerzPayment");
+
 
 app.use(cors());
 app.use(express.json());
@@ -39,7 +38,6 @@ async function run() {
       .collection("renter_request");
     const userCollection = client.db("gizmorentdb").collection("users");
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
-
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
     const websitereviewCollection = client.db("gizmorentdb").collection("websitereview");
@@ -77,7 +75,6 @@ async function run() {
       }
       res.send({ renter });
     });
-
 
     // Add a gadget
     app.post("/gadgets", async (req, res) => {
@@ -214,35 +211,6 @@ async function run() {
       }
     });
 
-    app.delete("/gadgets/:id", async (req, res) => {
-      const id = req.params.id;
-
-      // Validate the gadget ID
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: "Invalid gadget ID" });
-      }
-
-      const query = { _id: new ObjectId(id) };
-
-      try {
-        const result = await gadgetCollection.deleteOne(query);
-
-        if (result.deletedCount === 0) {
-          // If no gadget was found with the given ID
-          res.status(404).send({ error: "Gadget not found" });
-        } else {
-          // Gadget successfully deleted
-          res.send({ message: "Gadget deleted successfully", result });
-        }
-      } catch (error) {
-        // Log the error for debugging purposes
-        console.error("Error deleting gadget:", error);
-
-        // Return a 500 Internal Server Error
-        res.status(500).send({ error: "Failed to delete gadget" });
-      }
-    })
-
     // one gadget by product code
     app.get("/gadget/:serialCode", async (req, res) => {
       const { serialCode } = req.params;
@@ -300,7 +268,7 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-
+      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
 
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
@@ -513,6 +481,61 @@ async function run() {
       }
     });
 
+    // new users statistics
+
+    app.get("/new-users", async (req, res) => {
+      try {
+        const allUsers = await userCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .toArray();
+
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+        const addedLastMonth = await userCollection.countDocuments({
+          createdAt: { $gte: lastMonth },
+        });
+
+        const totalNewUsers = await userCollection.countDocuments();
+
+        // Group users by day of week
+        const chartData = await userCollection
+          .aggregate([
+            {
+              $match: { createdAt: { $gte: lastMonth } },
+            },
+            {
+              $group: {
+                _id: { $dayOfWeek: "$createdAt" },
+                users: { $sum: 1 },
+              },
+            },
+            {
+              $sort: { _id: 1 },
+            },
+          ])
+          .toArray();
+
+        // Convert to day names for chart
+        const dayMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const formattedChart = chartData.map((item) => ({
+          day: dayMap[item._id - 1],
+          users: item.users,
+        }));
+
+        res.json({
+          users: allUsers,
+          addedLastMonth,
+          totalNewUsers,
+          chart: formattedChart,
+        });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch users" });
+      }
+    });
+
     // Adding wishlist
     app.post("/wishlisted", async (req, res) => {
       try {
@@ -571,7 +594,6 @@ async function run() {
     // add cart list
     app.post("/cartlist", async (req, res) => {
       try {
-
         const {
           gadgetId,
           name,
@@ -626,7 +648,6 @@ async function run() {
       try {
         const id = req.params.id;
 
-
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid ID format" });
         }
@@ -654,7 +675,6 @@ async function run() {
         const id = req.params.id;
         const { quantity } = req.body;
 
-
         if (quantity <= 0 || isNaN(quantity)) {
           return res
             .status(400)
@@ -673,7 +693,6 @@ async function run() {
         const result = await cartlistCollection.updateOne(query, updateDoc);
 
         if (result.modifiedCount > 0) {
-
           const updatedItem = await cartlistCollection.findOne(query);
           return res.json(updatedItem);
         } else {
@@ -689,15 +708,14 @@ async function run() {
 
     // payment intrigation
 
-
-    app.post('/create-payment-intent', async (req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
 
       try {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: price * 100, // Stripe expects the amount in cents
-          currency: 'usd',
-          payment_method_types: ['card'],
+          currency: "usd",
+          payment_method_types: ["card"],
         });
 
         res.send({ clientSecret: paymentIntent.client_secret });
@@ -705,7 +723,7 @@ async function run() {
         console.error("Payment Intent Error:", error);
 
         // Send more specific error messages based on the error type
-        if (error.type === 'StripeCardError') {
+        if (error.type === "StripeCardError") {
           res.status(400).send({ error: "Card error: " + error.message });
         } else {
           res.status(500).send({ error: "Internal Server Error" });
@@ -713,18 +731,12 @@ async function run() {
       }
     });
 
-
-
-
     app.post("/payments", async (req, res) => {
-      const paymentInfo = req.body
-
+      const paymentInfo = req.body;
 
       const result = await paymentsCollection.insertOne(paymentInfo);
 
       res.send(result);
-
-
     });
 
     // get payment
@@ -737,7 +749,7 @@ async function run() {
 
     // recent payment
 
-    app.get('/recent-payment', async (req, res) => {
+    app.get("/recent-payment", async (req, res) => {
       try {
         const cursor = paymentsCollection.find().sort({ date: -1 }).limit(5);
 
@@ -749,57 +761,6 @@ async function run() {
       }
     });
 
-    // SSLCommerz initiation
-    // app.post("/sslcommerz-payment", async (req, res) => {
-    //   const { total_amount, cus_name, cus_email, cus_phone } = req.body;
-
-    //   // Add the required shipping_method field
-    //   const paymentData = {
-    //     total_amount,
-    //     currency: "USD",
-    //     tran_id: `TRX_${Date.now()}`, // Unique transaction ID
-    //     success_url: "https://gizmorent-7af7c.web.app/payment-success", // Add Like site Url 
-    //     fail_url: "https://gizmorent-7af7c.web.app/payment-fail",
-    //     cancel_url: "https://gizmorent-7af7c.web.app/payment-cancel",
-    //     cus_name,
-    //     cus_email,
-    //     cus_phone,
-    //     shipping_method: "Courier",
-    //     product_name: "Gadget Rent",
-    //     product_category: "Rental",
-    //     product_profile: "general",
-    //     ship_name: cus_name,
-    //     ship_add1: "Dhaka",
-    //     ship_add2: "Dhaka",
-    //     ship_city: "Dhaka",
-    //     ship_state: "Dhaka",
-    //     ship_postcode: "1000",
-    //     ship_country: "Bangladesh",
-    //   };
-
-    //   try {
-    //     const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-    //     const apiResponse = await sslcz.init(paymentData);
-
-
-    //     if (apiResponse && apiResponse.GatewayPageURL) {
-    //       await paymentsCollection.insertOne({
-    //         email: cus_email,
-    //         amount: total_amount,
-    //         transactionId: paymentData.tran_id,
-    //         date: new Date(),
-    //       });
-
-    //       res.send({ url: apiResponse.GatewayPageURL });
-    //     } else {
-    //       console.log("Failed to get payment gateway URL");
-    //       res.status(500).send({ error: "Failed to get payment gateway URL" });
-    //     }
-    //   } catch (error) {
-    //     console.log("SSLCommerz Error", { error: error.message });
-    //     res.status(500).send({ error: "Payment initiation failed" });
-    //   }
-    // });
 
     app.post("/sslcommerz-payment", async (req, res) => {
       try {
@@ -836,11 +797,10 @@ async function run() {
       }
     });
 
-    // order get
-
-
     app.get("/orders", async (req, res) => {
+
       const orders = await ordersCollection.find().toArray();
+
       res.send({ requests: orders });
     });
 
@@ -862,19 +822,28 @@ async function run() {
       }
     });
 
-    // order by email
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      const orders = await Order.find({ customer_email: email });
 
-    app.get("/orders/api", async (req, res) => {
-      const { email } = req.query;
-      const query = email ? { email } : {};
+      if (orders.length === 0) {
+        return res.status(404).json({ message: "No orders found" });
+      }
 
 
+      return res.json(orders);
+    });
+    // recent order
+
+    app.get('/recent-Order', async (req, res) => {
       try {
-        const result = await ordersCollection.find(query).toArray();
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
+
+        const result = await cursor.toArray();
         res.send(result);
-      } catch (err) {
-        console.error("Error fetching orders:", err);
-        res.status(500).send({ error: "Failed to fetch orders" });
+      } catch (error) {
+        console.error("Error fetching recent orders:", error);
+        res.status(500).send({ message: "Failed to fetch recent orders" });
       }
     });
 
@@ -891,19 +860,72 @@ async function run() {
 
       try {
         const result = await websitereviewCollection.insertOne(review);
-        res.send({ message: "Review added successfully", result });
+
       } catch (error) {
         console.error("Error adding review:", error);
         res.status(500).send({ error: "Failed to add review" });
       }
     });
 
+    // monthly order stats
+    app.get("/monthly-order", async (req, res) => {
+      try {
+        const result = await ordersCollection
+          .aggregate([
+            {
+              $addFields: {
+                orderDate: { $toDate: "$date" },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$orderDate" },
+                total: { $sum: "$amount" },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+          .toArray();
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const allMonths = monthNames.map((month) => ({
+          name: month,
+          value: 0,
+        }));
+
+        result.forEach((item) => {
+          const index = item._id - 1;
+          if (index >= 0 && index < 12) {
+            allMonths[index].value = item.total;
+          }
+        });
+
+        res.send(allMonths);
+      } catch (error) {
+        console.error("Error fetching monthly sales:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+    //     review get
 
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
     })
-
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
