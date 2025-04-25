@@ -5,7 +5,11 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+
+
 const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
+
+
 const app = express();
 const port = process.env.PORT || 5000;
 const initiateSSLCommerzPayment = require("./services/sslcommerzPayment");
@@ -40,7 +44,12 @@ async function run() {
     const cartlistCollection = client.db("gizmorentdb").collection("cart");
     const paymentsCollection = client.db("gizmorentdb").collection("payments");
     const ordersCollection = client.db("gizmorentdb").collection("orders");
-    const websitereviewCollection = client.db("gizmorentdb").collection("websitereview");
+    const websitereviewCollection = client
+      .db("gizmorentdb")
+      .collection("websitereview");
+    const renterGadgetCollection = client
+      .db("gizmorentdb")
+      .collection("renter-gadgets");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -193,7 +202,9 @@ async function run() {
       const query = { _id: new ObjectId(id) };
 
       try {
-        const result = await gadgetCollection.updateOne(query, { $set: updatedGadget });
+        const result = await gadgetCollection.updateOne(query, {
+          $set: updatedGadget,
+        });
 
         if (result.matchedCount === 0) {
           // If no gadget was found with the given ID
@@ -262,6 +273,41 @@ async function run() {
       }
     });
 
+    // renter review find
+
+    app.get("/renter-review/:ownerEmail", async (req, res) => {
+      const { ownerEmail } = req.params;
+
+      const result = await reviewCollection.find({ ownerEmail }).toArray();
+
+      res.send(result);
+    });
+
+    // renter gadget
+
+    app.post("/renter-gadgets", async (req, res) => {
+      const renterGadget = req.body;
+      const result = await renterGadgetCollection.insertOne(renterGadget);
+      res.send(result);
+    });
+    // get renter gadgets
+    app.get("/renter-gadgets", async (req, res) => {
+      const { status } = req.query;
+      const query = status ? { status } : {};
+      const result = await renterGadgetCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.put("/renter-gadgets/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedGadget = req.body;
+      delete updatedGadget._id;
+      const result = await renterGadgetCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedGadget }
+      );
+      res.send(result);
+    });
+
     // review post
     app.post("/product-review", async (req, res) => {
       try {
@@ -297,8 +343,6 @@ async function run() {
     // renter approval & renterid
 
     app.patch("/approve_renter/:email", async (req, res) => {
-      console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
-
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
@@ -347,6 +391,17 @@ async function run() {
         res.send({ message: "Renter request rejected" });
       } catch (error) {
         res.status(500).send({ error: "Failed to reject request" });
+      }
+    });
+
+    // getting all renter
+    app.get("/renter", async (req, res) => {
+      try {
+        const renters = await userCollection.find({ role: "renter" }).toArray();
+        res.send(renters);
+      } catch (error) {
+        console.error("Error fetching renters:", error);
+        res.status(500).send({ error: "Failed to fetch renters" });
       }
     });
 
@@ -625,6 +680,7 @@ async function run() {
       try {
         const {
           gadgetId,
+          renterId,
           name,
           image,
           price,
@@ -770,7 +826,6 @@ async function run() {
 
     // get payment
 
-
     app.get("/payments", async (req, res) => {
       const payment = await paymentsCollection.find().toArray();
       res.send(payment);
@@ -791,6 +846,7 @@ async function run() {
     });
 
 
+
     app.post("/sslcommerz-payment", async (req, res) => {
       try {
         const result = await initiateSSLCommerzPayment(req, paymentsCollection);
@@ -800,7 +856,7 @@ async function run() {
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
-
+    
     // order post
 
     app.post("/orders", async (req, res) => {
@@ -826,11 +882,48 @@ async function run() {
       }
     });
 
+
+
+    // order get
+
+
     app.get("/orders", async (req, res) => {
 
       const orders = await ordersCollection.find().toArray();
 
       res.send({ requests: orders });
+    });
+
+    // renter earning
+
+    app.get("/renter-orders-summary/:renterId", async (req, res) => {
+      const renterId = req.params.renterId;
+
+      try {
+        const orders = await ordersCollection.find({ renterId }).toArray();
+
+        const totalOrders = orders.length;
+
+        const totalRevenue = orders.reduce((sum, order) => {
+          const price = Number(
+            order.price || order.amount || order.totalPrice || 0
+          );
+          return sum + price;
+        }, 0);
+
+        const renterEarnings = totalRevenue * 0.9;
+        const adminCommission = totalRevenue * 0.1;
+
+        res.send({
+          totalOrders,
+          totalRevenue: totalRevenue.toFixed(2),
+          renterEarnings: renterEarnings.toFixed(2),
+          adminCommission: adminCommission.toFixed(2),
+        });
+      } catch (error) {
+        console.error("Error getting renter summary:", error);
+        res.status(500).send({ error: "Failed to calculate earnings." });
+      }
     });
 
     // order update
@@ -865,6 +958,24 @@ async function run() {
     // recent order
 
     app.get('/recent-Order', async (req, res) => {
+
+      try {
+        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
+
+        const result = await cursor.toArray();
+        res.send(result);
+
+
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+        res.status(500).send({ error: "Failed to fetch the orders" });
+
+      }
+    });
+
+    // recent order
+
+    app.get("/recent-Order", async (req, res) => {
       try {
         const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
 
@@ -876,13 +987,68 @@ async function run() {
       }
     });
 
+    // monthly order stats
+    app.get("/monthly-order", async (req, res) => {
+      try {
+        const result = await ordersCollection
+          .aggregate([
+            {
+              $addFields: {
+                orderDate: { $toDate: "$date" },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$orderDate" },
+                total: { $sum: "$amount" },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+          .toArray();
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const allMonths = monthNames.map((month) => ({
+          name: month,
+          value: 0,
+        }));
+
+        result.forEach((item) => {
+          const index = item._id - 1;
+          if (index >= 0 && index < 12) {
+            allMonths[index].value = item.total;
+          }
+        });
+
+        res.send(allMonths);
+      } catch (error) {
+        console.error("Error fetching monthly sales:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
 
     // Add a user review
     app.post("/reviews", async (req, res) => {
       const review = req.body;
 
       if (!review.userId || !review.comment) {
-        return res.status(400).send({ error: "UserId and comment are required" });
+        return res
+          .status(400)
+          .send({ error: "UserId and comment are required" });
       }
 
       review.timestamp = new Date(); // Add a timestamp for the review
@@ -895,6 +1061,7 @@ async function run() {
         res.status(500).send({ error: "Failed to add review" });
       }
     });
+
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
@@ -955,6 +1122,7 @@ async function run() {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
     })
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
