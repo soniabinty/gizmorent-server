@@ -244,6 +244,16 @@ async function run() {
       }
     });
 
+    // renter review find
+
+    app.get("/renter-review/:ownerEmail", async (req, res) => {
+      const { ownerEmail } = req.params;
+
+      const result = await reviewCollection.find({ ownerEmail }).toArray();
+
+      res.send(result);
+    });
+
     // renter gadget
 
     app.post("/renter-gadgets", async (req, res) => {
@@ -355,7 +365,6 @@ async function run() {
       }
     });
 
-
     // getting all renter
     app.get("/renter", async (req, res) => {
       try {
@@ -366,8 +375,6 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch renters" });
       }
     });
-    
-
 
     // Register User
     app.post("/register", async (req, res) => {
@@ -892,25 +899,26 @@ async function run() {
       res.send({ requests: orders });
     });
 
-// renter earning
-   
+    // renter earning
+
     app.get("/renter-orders-summary/:renterId", async (req, res) => {
       const renterId = req.params.renterId;
-    
+
       try {
         const orders = await ordersCollection.find({ renterId }).toArray();
-    
+
         const totalOrders = orders.length;
-    
-     
+
         const totalRevenue = orders.reduce((sum, order) => {
-          const price = Number(order.price || order.amount || order.totalPrice || 0);
+          const price = Number(
+            order.price || order.amount || order.totalPrice || 0
+          );
           return sum + price;
         }, 0);
-    
+
         const renterEarnings = totalRevenue * 0.9;
         const adminCommission = totalRevenue * 0.1;
-    
+
         res.send({
           totalOrders,
           totalRevenue: totalRevenue.toFixed(2),
@@ -922,8 +930,6 @@ async function run() {
         res.status(500).send({ error: "Failed to calculate earnings." });
       }
     });
-    
-    
 
     // order update
 
