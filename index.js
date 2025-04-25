@@ -211,6 +211,35 @@ async function run() {
       }
     });
 
+    app.delete("/gadgets/:id", async (req, res) => {
+      const id = req.params.id;
+
+      // Validate the gadget ID
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid gadget ID" });
+      }
+
+      const query = { _id: new ObjectId(id) };
+
+      try {
+        const result = await gadgetCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          // If no gadget was found with the given ID
+          res.status(404).send({ error: "Gadget not found" });
+        } else {
+          // Gadget successfully deleted
+          res.send({ message: "Gadget deleted successfully", result });
+        }
+      } catch (error) {
+        // Log the error for debugging purposes
+        console.error("Error deleting gadget:", error);
+
+        // Return a 500 Internal Server Error
+        res.status(500).send({ error: "Failed to delete gadget" });
+      }
+    })
+
     // one gadget by product code
     app.get("/gadget/:serialCode", async (req, res) => {
       const { serialCode } = req.params;
