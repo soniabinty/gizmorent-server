@@ -58,7 +58,10 @@ const initiateSSLCommerzPayment = async (req, paymentsCollection) => {
                 date: new Date(),
             });
 
-            return { url: response.data.GatewayPageURL, tran_id };
+            return {
+                url: response.data.GatewayPageURL, tran_id, cus_email,
+                total_amount
+            };
         } else {
             throw new Error("Failed to get payment gateway URL");
         }
