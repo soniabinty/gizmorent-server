@@ -6,14 +6,11 @@ const bcrypt = require("bcrypt");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
-
 const stripe = require("stripe")(process.env.STRIPE_ACCESS_KEY);
-
 
 const app = express();
 const port = process.env.PORT || 5000;
 const initiateSSLCommerzPayment = require("./services/sslcommerzPayment");
-
 
 app.use(cors());
 app.use(express.json());
@@ -249,7 +246,7 @@ async function run() {
         // Return a 500 Internal Server Error
         res.status(500).send({ error: "Failed to delete gadget" });
       }
-    })
+    });
 
     // one gadget by product code
     app.get("/gadget/:serialCode", async (req, res) => {
@@ -259,6 +256,57 @@ async function run() {
         res.send(result);
       } catch {
         res.status(500).send({ error: "Failed to fetch product" });
+      }
+    });
+
+    // top rented gadgets
+    app.get("/top-rented-gadgets", async (req, res) => {
+      try {
+        const topRentedGadgets = await ordersCollection
+          .aggregate([
+            {
+              $match: {
+                product_id: { $exists: true, $ne: null },
+              },
+            },
+            {
+              $group: {
+                _id: "$product_id",
+                totalRented: { $sum: 1 },
+              },
+            },
+            {
+              $sort: { totalRented: -1 },
+            },
+            // {
+            //   $limit: 20,
+            // },
+            {
+              $addFields: {
+                objectId: { $toObjectId: "$_id" }, // create correct ObjectId
+              },
+            },
+            {
+              $lookup: {
+                from: "gadget",
+                localField: "objectId",
+                foreignField: "_id",
+                as: "gadgetDetails",
+              },
+            },
+            {
+              $unwind: "$gadgetDetails",
+            },
+            {
+              $limit: 10,
+            },
+          ])
+          .toArray();
+
+        res.send(topRentedGadgets);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Something went wrong" });
       }
     });
 
@@ -845,8 +893,6 @@ async function run() {
       }
     });
 
-
-
     app.post("/sslcommerz-payment", async (req, res) => {
       try {
         const result = await initiateSSLCommerzPayment(req, paymentsCollection);
@@ -856,7 +902,7 @@ async function run() {
         res.status(500).send({ error: "Payment initiation failed" });
       }
     });
-    
+
     // order post
 
     app.post("/orders", async (req, res) => {
@@ -882,13 +928,9 @@ async function run() {
       }
     });
 
-
-
     // order get
 
-
     app.get("/orders", async (req, res) => {
-
       const orders = await ordersCollection.find().toArray();
 
       res.send({ requests: orders });
@@ -952,24 +994,19 @@ async function run() {
         return res.status(404).json({ message: "No orders found" });
       }
 
-
       return res.json(orders);
     });
     // recent order
 
-    app.get('/recent-Order', async (req, res) => {
-
+    app.get("/recent-Order", async (req, res) => {
       try {
         const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
 
         const result = await cursor.toArray();
         res.send(result);
-
-
       } catch (err) {
         console.error("Error fetching orders:", err);
         res.status(500).send({ error: "Failed to fetch the orders" });
-
       }
     });
 
@@ -1055,13 +1092,11 @@ async function run() {
 
       try {
         const result = await websitereviewCollection.insertOne(review);
-
       } catch (error) {
         console.error("Error adding review:", error);
         res.status(500).send({ error: "Failed to add review" });
       }
     });
-
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
@@ -1121,8 +1156,7 @@ async function run() {
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
-    })
-
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
