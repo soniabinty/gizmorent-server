@@ -109,7 +109,7 @@ async function run() {
         maxPrice,
         sort,
         page = 1,
-        limit = 6,
+        limit = 8,
       } = req.query;
 
       const filter = {};
@@ -986,15 +986,21 @@ async function run() {
       }
     });
 
-    app.get("/orders", async (req, res) => {
-      const email = req.query.email;
-      const orders = await Order.find({ customer_email: email });
+    app.get("/orders/api", async (req, res) => {
+      const { email } = req.query;
+      const query = email ? { email } : {};
 
-      if (orders.length === 0) {
-        return res.status(404).json({ message: "No orders found" });
+      try {
+        const result = await ordersCollection.find(query).toArray();
+        res.send(result);
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+        res.status(500).send({ error: "Failed to fetch the orders" });
       }
 
+
       return res.json(orders);
+
     });
     // recent order
 
@@ -1010,19 +1016,37 @@ async function run() {
       }
     });
 
-    // recent order
 
-    app.get("/recent-Order", async (req, res) => {
+    app.get("/gadgets/top-rented", async (req, res) => {
       try {
-        const cursor = ordersCollection.find().sort({ date: -1 }).limit(4);
-
-        const result = await cursor.toArray();
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching recent orders:", error);
-        res.status(500).send({ message: "Failed to fetch recent orders" });
+        const topGadgets = await ordersCollection.aggregate([
+          {
+            $group: {
+              _id: "$ProductId",           // Group by gadgetId
+              rentCount: { $sum: 1 },     // Count how many times each gadget was rented
+            },
+          },
+          { $sort: { rentCount: -1 } },   // Sort by most rented
+          { $limit: 5 },                  // Top 5
+          {
+            $lookup: {
+              from: "gadgets",           // Join with gadgets collection
+              localField: "_id",
+              foreignField: "_id",
+              as: "gadgetInfo",
+            },
+          },
+          { $unwind: "$gadgetInfo" },      // Flatten gadgetInfo array
+         
+        ]).toArray();
+    
+        res.send(topGadgets);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Server error fetching top rented gadgets" });
       }
     });
+    
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
