@@ -112,7 +112,7 @@ async function run() {
         maxPrice,
         sort,
         page = 1,
-        limit = 6,
+        limit = 8,
       } = req.query;
 
       const filter = {};
