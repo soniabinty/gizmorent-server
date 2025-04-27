@@ -1148,9 +1148,6 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
 
-
-      return res.json(orders);
-
     });
 
     // recent order
@@ -1165,6 +1162,8 @@ async function run() {
         console.error("Error fetching orders:", err);
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
+
+    
     });
 
 
