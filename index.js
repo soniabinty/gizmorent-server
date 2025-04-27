@@ -311,6 +311,8 @@ async function run() {
       const result = await renterGadgetCollection.insertOne(renterGadget);
       res.send(result);
     });
+
+
     // get renter gadgets
     app.get("/renter-gadgets", async (req, res) => {
       const { status } = req.query;
@@ -329,8 +331,8 @@ async function run() {
       );
 
       await notificationCollection.insertOne({
-        userEmail: gadget.email,
-        message: `Your gadget "${gadget.name}" has been approved.`,
+        userEmail: updatedGadget.email,
+        message: `Your gadget "${updatedGadget.name}" has been approved.`,
         type: "gadget_approval",
         isRead: false,
         createdAt: new Date(),
@@ -1145,16 +1147,16 @@ async function run() {
             },
           },
           { $unwind: "$gadgetInfo" },      // Flatten gadgetInfo array
-         
+
         ]).toArray();
-    
+
         res.send(topGadgets);
       } catch (err) {
         console.error(err);
         res.status(500).send({ message: "Server error fetching top rented gadgets" });
       }
     });
-    
+
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
