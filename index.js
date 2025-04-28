@@ -47,6 +47,9 @@ async function run() {
     const renterGadgetCollection = client
       .db("gizmorentdb")
       .collection("renter-gadgets");
+    const subscriptionsCollection = client
+      .db("gizmorentdb")
+      .collection("subscriptions");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -1204,6 +1207,55 @@ async function run() {
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
+    });
+    // subcription
+    app.post("/subscription", async (req, res) => {
+      const { email, planName, planPrice, planPeriod } = req.body;
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setMonth(startDate.getMonth() + 1);
+
+      try {
+        await subscriptionsCollection.updateMany(
+          { email, active: true },
+          { $set: { active: false } }
+        );
+
+        const subscription = {
+          email,
+          planName,
+          planPrice,
+          planPeriod,
+          startDate,
+          endDate,
+          active: true,
+          gadgetsRented: 0,
+        };
+        const result = await subscriptionsCollection.insertOne(subscription);
+        res.send(result);
+      } catch (error) {
+        console.error("Error creating subscription:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+    app.get("/subscription/active", async (req, res) => {
+      const { email } = req.query;
+
+      try {
+        const activeSubscription = await subscriptionsCollection.findOne({
+          email,
+          active: true,
+        });
+
+        if (activeSubscription) {
+          res.json({ active: true, subscription: activeSubscription });
+        } else {
+          res.json({ active: false });
+        }
+      } catch (error) {
+        console.error("Error fetching subscription:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
     });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
