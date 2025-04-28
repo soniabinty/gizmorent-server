@@ -1092,47 +1092,22 @@ async function run() {
       const orderId = req.params.id;
       const { status, returning_time } = req.body;
 
-      if (!ObjectId.isValid(orderId)) {
-        return res.status(400).send({ error: "Invalid order ID" });
-      }
-
       try {
-
         const updateFields = {};
         if (status) updateFields.status = status;
         if (returning_time) updateFields.returning_time = returning_time;
         const result = await ordersCollection.updateOne(
           { _id: new ObjectId(orderId) },
           { $set: updateFields }
-
-        const order = await ordersCollection.findOne({ _id: new ObjectId(orderId) });
-
-        if (!order) {
-          return res.status(404).send({ error: "Order not found" });
-        }
-
-        const result = await ordersCollection.updateOne(
-          { _id: new ObjectId(orderId) },
-          { $set: { status } }
-
         );
-
-        // Send notification to user
-        await notificationCollection.insertOne({
-          userEmail: order.customer_email || order.email,
-          message: `Your order #${orderId} status has been updated to "${status}".`,
-          type: "order_status",
-          isRead: false,
-          createdAt: new Date(),
-        });
-
-        res.send({ message: "Order status updated and notification sent.", result });
+        res.send(result);
       } catch (error) {
-        console.error("Error updating order status:", error);
-        res.status(500).send({ error: "Failed to update order status" });
+        console.error("Status update error:", error);
+        res.status(500).send({ error: "Failed to update status." });
       }
     });
 
+    
     app.get("/orders/api", async (req, res) => {
       const { email } = req.query;
       const query = email ? { email } : {};
