@@ -972,12 +972,15 @@ async function run() {
 
     app.patch("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
-      const { status } = req.body;
+      const { status, returning_time } = req.body;
 
       try {
+        const updateFields = {};
+        if (status) updateFields.status = status;
+        if (returning_time) updateFields.returning_time = returning_time;
         const result = await ordersCollection.updateOne(
           { _id: new ObjectId(orderId) },
-          { $set: { status: status } }
+          { $set: updateFields }
         );
         res.send(result);
       } catch (error) {
@@ -997,10 +1000,30 @@ async function run() {
         console.error("Error fetching orders:", err);
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
+    });
+    // single order
+    app.get("/orders/:id", async (req, res) => {
+      const orderId = req.params.id;
 
+      if (!ObjectId.isValid(orderId)) {
+        console.error("Invalid Order ID received:", orderId);
+        return res.status(400).json({ error: "Invalid Order ID format." });
+      }
 
-      return res.json(orders);
+      try {
+        const order = await ordersCollection.findOne({
+          _id: new ObjectId(orderId),
+        });
 
+        if (!order) {
+          return res.status(404).json({ error: "Order not found." });
+        }
+
+        res.json(order);
+      } catch (error) {
+        console.error("Order fetch error:", error);
+        res.status(500).json({ error: "Server error while fetching order." });
+      }
     });
     // recent order
 
@@ -1016,37 +1039,38 @@ async function run() {
       }
     });
 
-
     app.get("/gadgets/top-rented", async (req, res) => {
       try {
-        const topGadgets = await ordersCollection.aggregate([
-          {
-            $group: {
-              _id: "$ProductId",           // Group by gadgetId
-              rentCount: { $sum: 1 },     // Count how many times each gadget was rented
+        const topGadgets = await ordersCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$ProductId", // Group by gadgetId
+                rentCount: { $sum: 1 }, // Count how many times each gadget was rented
+              },
             },
-          },
-          { $sort: { rentCount: -1 } },   // Sort by most rented
-          { $limit: 5 },                  // Top 5
-          {
-            $lookup: {
-              from: "gadgets",           // Join with gadgets collection
-              localField: "_id",
-              foreignField: "_id",
-              as: "gadgetInfo",
+            { $sort: { rentCount: -1 } }, // Sort by most rented
+            { $limit: 5 }, // Top 5
+            {
+              $lookup: {
+                from: "gadgets", // Join with gadgets collection
+                localField: "_id",
+                foreignField: "_id",
+                as: "gadgetInfo",
+              },
             },
-          },
-          { $unwind: "$gadgetInfo" },      // Flatten gadgetInfo array
-         
-        ]).toArray();
-    
+            { $unwind: "$gadgetInfo" }, // Flatten gadgetInfo array
+          ])
+          .toArray();
+
         res.send(topGadgets);
       } catch (err) {
         console.error(err);
-        res.status(500).send({ message: "Server error fetching top rented gadgets" });
+        res
+          .status(500)
+          .send({ message: "Server error fetching top rented gadgets" });
       }
     });
-    
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
