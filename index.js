@@ -939,61 +939,43 @@ async function run() {
       }
     });
 
-    // payment intrigation
 
+  
+    
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
-    
-      if (!price || isNaN(price) || price <= 0) {
-        return res.status(400).send({ error: "Invalid price amount" });
-      }
-    
+
       try {
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: price * 100, // Convert to cents
+          amount: price * 100, // Stripe expects the amount in cents
           currency: "usd",
           payment_method_types: ["card"],
         });
-    
-        if (paymentIntent && paymentIntent.client_secret) {
-          return res.send({ clientSecret: paymentIntent.client_secret });
-        } else {
-          return res.status(500).send({ error: "Failed to create payment intent" });
-        }
+
+        res.send({ clientSecret: paymentIntent.client_secret });
       } catch (error) {
         console.error("Payment Intent Error:", error);
-        res.status(500).send({ error: "Internal Server Error" });
+
+        // Send more specific error messages based on the error type
+        if (error.type === "StripeCardError") {
+          res.status(400).send({ error: "Card error: " + error.message });
+        } else {
+          res.status(500).send({ error: "Internal Server Error" });
+        }
       }
     });
-    
-    
-    
 
-    // Notify user when payment is successful
     app.post("/payments", async (req, res) => {
       const paymentInfo = req.body;
-     
-      try {
-        const result = await paymentsCollection.insertOne(paymentInfo);
-     
 
-        // Send payment notification to user
-        await notificationCollection.insertOne({
-          userEmail: paymentInfo.email,
-          message: `Your payment of $${paymentInfo.amount} was successful.`,
-          type: "payment",
-          isRead: false,
-          createdAt: new Date(),
-        });
+      const result = await paymentsCollection.insertOne(paymentInfo);
 
-        res.send({ message: "Payment recorded and notification sent.", result });
+      res.send(result);
+    });
+    
+
+  
  
-      } catch (error) {
-        console.error("Error processing payment:", error);
-        res.status(500).send({ error: "Failed to process payment" });
-      }
-    });
-
     // get payment
 
     app.get("/payments", async (req, res) => {
