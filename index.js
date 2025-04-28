@@ -110,7 +110,7 @@ async function run() {
         maxPrice,
         sort,
         page = 1,
-        limit = 8,
+        limit = 12,
       } = req.query;
 
       const filter = {};
@@ -1107,7 +1107,7 @@ async function run() {
       }
     });
 
-    
+
     app.get("/orders/api", async (req, res) => {
       const { email } = req.query;
       const query = email ? { email } : {};
