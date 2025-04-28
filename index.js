@@ -47,6 +47,7 @@ async function run() {
     const renterGadgetCollection = client
       .db("gizmorentdb")
       .collection("renter-gadgets");
+    const notificationCollection = client.db("gizmorentdb").collection("notifications");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -196,6 +197,7 @@ async function run() {
       }
 
       const updatedGadget = req.body;
+      const userEmail = updatedGadget.email;
       const query = { _id: new ObjectId(id) };
 
       try {
@@ -208,6 +210,14 @@ async function run() {
           res.status(404).send({ error: "Gadget not found" });
         } else {
           // Gadget successfully updated
+          await notificationCollection.insertOne({
+            email, // Notify the user who updated the gadget
+            message: `Your gadget "${updatedGadget.name}" has been updated successfully.`,
+            type: "gadget_update",
+            isRead: false,
+            createdAt: new Date(),
+          });
+
           res.send({ message: "Gadget updated successfully", result });
         }
       } catch (error) {
@@ -226,16 +236,27 @@ async function run() {
       if (!ObjectId.isValid(id)) {
         return res.status(400).send({ error: "Invalid gadget ID" });
       }
-
+      const { email } = req.query;
       const query = { _id: new ObjectId(id) };
 
       try {
+        const gadget = await gadgetCollection.findOne(query);
+
         const result = await gadgetCollection.deleteOne(query);
 
         if (result.deletedCount === 0) {
           // If no gadget was found with the given ID
           res.status(404).send({ error: "Gadget not found" });
         } else {
+          // Add notification for gadget deletion
+          await notificationCollection.insertOne({
+            userEmail, // Notify the user who deleted the gadget
+            message: `Your gadget "${gadget?.name || "Unknown"}" has been deleted successfully.`,
+            type: "gadget_deletion",
+            isRead: false,
+            createdAt: new Date(),
+          });
+
           // Gadget successfully deleted
           res.send({ message: "Gadget deleted successfully", result });
         }
@@ -338,6 +359,8 @@ async function run() {
       const result = await renterGadgetCollection.insertOne(renterGadget);
       res.send(result);
     });
+
+
     // get renter gadgets
     app.get("/renter-gadgets", async (req, res) => {
       const { status } = req.query;
@@ -345,6 +368,7 @@ async function run() {
       const result = await renterGadgetCollection.find(query).toArray();
       res.send(result);
     });
+
     app.put("/renter-gadgets/:id", async (req, res) => {
       const id = req.params.id;
       const updatedGadget = req.body;
@@ -353,6 +377,14 @@ async function run() {
         { _id: new ObjectId(id) },
         { $set: updatedGadget }
       );
+
+      await notificationCollection.insertOne({
+        userEmail: updatedGadget.email,
+        message: `Your gadget "${updatedGadget.name}" has been approved.`,
+        type: "gadget_approval",
+        isRead: false,
+        createdAt: new Date(),
+      });
       res.send(result);
     });
 
@@ -369,35 +401,59 @@ async function run() {
 
     // Add renter application
     app.post("/renter_request", async (req, res) => {
-      const { email } = req.body;
+      const { email, name } = req.body; // Assuming `name` is also passed in the request body
       const existingRenter = await rentalRequestCollection.findOne({ email });
 
       if (existingRenter) {
-        res
-          .status(400)
-          .send({ error: "You have already submitted a renter request." });
+        res.status(400).send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
-        const result = await rentalRequestCollection.insertOne(newRenter);
-        res.send(result);
+
+        try {
+          const result = await rentalRequestCollection.insertOne(newRenter);
+
+          // Add notification for admin
+          await notificationCollection.insertOne({
+            userEmail: "admin@gizmorent.com", // Replace with the actual admin email
+            message: `${name} (${email}) has submitted a renter request.`,
+            type: "renter_request",
+            isRead: false,
+            createdAt: new Date(),
+            role: "admin",
+          });
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error submitting renter request:", error);
+          res.status(500).send({ error: "Failed to submit renter request" });
+        }
       }
     });
 
     app.get("/renter_request", async (req, res) => {
-      const result = await rentalRequestCollection.find().toArray();
-      res.send({ requests: result });
+      try {
+        const result = await rentalRequestCollection.find().toArray();
+        res.send({ requests: result });
+      } catch (error) {
+        console.error("Error fetching renter requests:", error);
+        res.status(500).send({ error: "Failed to fetch renter requests" });
+      }
     });
 
-    // renter approval & renterid
-
+    // Renter approval & renterid
     app.patch("/approve_renter/:email", async (req, res) => {
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
-      const renterCode =
-        "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+      const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
 
       try {
+        const user = await userCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
         const result = await userCollection.updateOne(
           { email },
           {
@@ -421,6 +477,25 @@ async function run() {
 
         await rentalRequestCollection.deleteOne({ email });
 
+        // Add notification for renter
+        await notificationCollection.insertOne({
+          userEmail: email,
+          message: `Your renter request has been approved. Your renter code is ${renterCode}.`,
+          type: "renter_approval",
+          isRead: false,
+          createdAt: new Date(),
+        });
+
+        // Add notification for admin
+        await notificationCollection.insertOne({
+          userEmail: "admin@gizmorent.com", // Replace with the actual admin email
+          message: `Renter request for ${user.name} (${email}) has been approved. Renter code: ${renterCode}.`,
+          type: "renter_approval",
+          isRead: false,
+          createdAt: new Date(),
+          role: "admin",
+        });
+
         res.send({ modifiedCount: result.modifiedCount, renterCode });
       } catch (error) {
         console.error("Approval error:", error);
@@ -428,16 +503,41 @@ async function run() {
       }
     });
 
-    //  renter rejection
-
+    // Renter rejection
     app.delete("/reject_renter/:email", async (req, res) => {
       const email = req.params.email;
 
       try {
+        const user = await rentalRequestCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ error: "Renter request not found" });
+        }
+
         await rentalRequestCollection.deleteOne({ email });
+
+        // Add notification for renter
+        await notificationCollection.insertOne({
+          userEmail: email,
+          message: `Your renter request has been rejected.`,
+          type: "renter_rejection",
+          isRead: false,
+          createdAt: new Date(),
+        });
+
+        // Add notification for admin
+        await notificationCollection.insertOne({
+          userEmail: "admin@gizmorent.com", // Replace with the actual admin email
+          message: `Renter request for ${user.name} (${email}) has been rejected.`,
+          type: "renter_rejection",
+          isRead: false,
+          createdAt: new Date(),
+          role: "admin",
+        });
 
         res.send({ message: "Renter request rejected" });
       } catch (error) {
+        console.error("Error rejecting renter request:", error);
         res.status(500).send({ error: "Failed to reject request" });
       }
     });
@@ -864,12 +964,28 @@ async function run() {
       }
     });
 
+
+    // Notify user when payment is successful
     app.post("/payments", async (req, res) => {
       const paymentInfo = req.body;
 
-      const result = await paymentsCollection.insertOne(paymentInfo);
+      try {
+        const result = await paymentsCollection.insertOne(paymentInfo);
 
-      res.send(result);
+        // Send payment notification to user
+        await notificationCollection.insertOne({
+          userEmail: paymentInfo.email,
+          message: `Your payment of $${paymentInfo.amount} was successful.`,
+          type: "payment",
+          isRead: false,
+          createdAt: new Date(),
+        });
+
+        res.send({ message: "Payment recorded and notification sent.", result });
+      } catch (error) {
+        console.error("Error processing payment:", error);
+        res.status(500).send({ error: "Failed to process payment" });
+      }
     });
 
     // get payment
@@ -896,6 +1012,19 @@ async function run() {
     app.post("/sslcommerz-payment", async (req, res) => {
       try {
         const result = await initiateSSLCommerzPayment(req, paymentsCollection);
+
+        if (result) {
+          const { cus_email, total_amount, tran_id } = result; // Make sure these fields are available in result
+
+          await notificationCollection.insertOne({
+            userEmail: cus_email,
+            message: `Your payment of $${total_amount} was successfully initiated. Transaction ID: ${tran_id}.`,
+            type: "payment",
+            isRead: false,
+            createdAt: new Date(),
+          });
+        }
+
         res.send(result);
       } catch (error) {
         console.error("SSLCommerz Error:", error.message);
@@ -970,22 +1099,49 @@ async function run() {
 
     // order update
 
+    // Notify user when order status is updated
     app.patch("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
       const { status, returning_time } = req.body;
 
+      if (!ObjectId.isValid(orderId)) {
+        return res.status(400).send({ error: "Invalid order ID" });
+      }
+
       try {
+
         const updateFields = {};
         if (status) updateFields.status = status;
         if (returning_time) updateFields.returning_time = returning_time;
         const result = await ordersCollection.updateOne(
           { _id: new ObjectId(orderId) },
           { $set: updateFields }
+
+        const order = await ordersCollection.findOne({ _id: new ObjectId(orderId) });
+
+        if (!order) {
+          return res.status(404).send({ error: "Order not found" });
+        }
+
+        const result = await ordersCollection.updateOne(
+          { _id: new ObjectId(orderId) },
+          { $set: { status } }
+
         );
-        res.send(result);
+
+        // Send notification to user
+        await notificationCollection.insertOne({
+          userEmail: order.customer_email || order.email,
+          message: `Your order #${orderId} status has been updated to "${status}".`,
+          type: "order_status",
+          isRead: false,
+          createdAt: new Date(),
+        });
+
+        res.send({ message: "Order status updated and notification sent.", result });
       } catch (error) {
-        console.error("Status update error:", error);
-        res.status(500).send({ error: "Failed to update status." });
+        console.error("Error updating order status:", error);
+        res.status(500).send({ error: "Failed to update order status" });
       }
     });
 
@@ -1001,9 +1157,12 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
     });
+  
+  
     // single order
     app.get("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
+
 
       if (!ObjectId.isValid(orderId)) {
         console.error("Invalid Order ID received:", orderId);
@@ -1024,7 +1183,9 @@ async function run() {
         console.error("Order fetch error:", error);
         res.status(500).json({ error: "Server error while fetching order." });
       }
+
     });
+
     // recent order
 
     app.get("/recent-Order", async (req, res) => {
@@ -1037,6 +1198,8 @@ async function run() {
         console.error("Error fetching orders:", err);
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
+
+    
     });
 
     app.get("/gadgets/top-rented", async (req, res) => {
@@ -1059,9 +1222,10 @@ async function run() {
                 as: "gadgetInfo",
               },
             },
-            { $unwind: "$gadgetInfo" }, // Flatten gadgetInfo array
-          ])
-          .toArray();
+
+          { $unwind: "$gadgetInfo" },      // Flatten gadgetInfo array
+
+        ]).toArray();
 
         res.send(topGadgets);
       } catch (err) {
@@ -1071,6 +1235,7 @@ async function run() {
           .send({ message: "Server error fetching top rented gadgets" });
       }
     });
+
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
@@ -1204,7 +1369,150 @@ async function run() {
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
+    })
+
+    // Add a notification
+    app.post("/notifications", async (req, res) => {
+      const { userEmail, message, type } = req.body;
+
+      try {
+        const notification = {
+          userEmail,
+          message,
+          type,
+          isRead: false,
+          createdAt: new Date(),
+        };
+
+        const result = await notificationCollection.insertOne(notification);
+        res.send({ message: "Notification added successfully", result });
+      } catch (error) {
+        console.error("Error adding notification:", error);
+        res.status(500).send({ error: "Failed to add notification" });
+      }
     });
+
+    // Get all notifications
+    app.get("/notifications/all", async (req, res) => {
+      try {
+        const notifications = await notificationCollection
+          .find().toArray();
+
+        res.send(notifications);
+      } catch (error) {
+        console.error("Error fetching all notifications:", error);
+        res.status(500).send({ error: "Failed to fetch notifications" });
+      }
+    });
+
+    // Get only admin role notifications
+    app.get("/notifications/admin", async (req, res) => {
+      const { role } = req.query;
+
+      try {
+        let notifications;
+
+        if (role === "admin") {
+          // Fetch only notifications where role is admin
+          notifications = await notificationCollection
+            .find({ role: "admin" }) // 🛑 Important filtering here
+            .sort({ createdAt: -1 })
+            .toArray();
+        } else {
+          // If not admin, no notifications (or you can handle normally if you want)
+          notifications = [];
+        }
+
+        res.send(notifications);
+      } catch (error) {
+        console.error("Error fetching admin notifications:", error);
+        res.status(500).send({ error: "Failed to fetch notifications" });
+      }
+    });
+
+    app.delete("/notifications/admin/all", async (req, res) => {
+      try {
+        const result = await notificationCollection.deleteMany({ role: "admin" }); 
+        res.send({ message: "Admin notifications deleted", deletedCount: result.deletedCount });
+      } catch (error) {
+        console.error("Error deleting admin notifications:", error);
+        res.status(500).send({ error: "Failed to delete admin notifications" });
+      }
+    });
+
+
+    // Get notifications for a user
+    app.get("/notifications", async (req, res) => {
+      const { email } = req.query;
+
+      if (!email) {
+        return res.status(400).send({ error: "Email is required" });
+      }
+
+      try {
+        let notifications;
+
+
+        // Otherwise, fetch notifications specific to the user
+        notifications = await notificationCollection
+          .find({ userEmail: email })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send(notifications);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        res.status(500).send({ error: "Failed to fetch notifications" });
+      }
+    });
+
+    // Mark a notification as read
+    app.patch("/notifications/:id", async (req, res) => {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid notification ID" });
+      }
+
+      try {
+        const result = await notificationCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { isRead: true } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ error: "Notification not found" });
+        }
+
+        res.send({ message: "Notification marked as read" });
+      } catch (error) {
+        console.error("Error marking notification as read:", error);
+        res.status(500).send({ error: "Failed to mark notification as read" });
+      }
+    });
+
+    // Delete a notification
+    app.delete("/notifications/:id", async (req, res) => {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid notification ID" });
+      }
+
+      try {
+        const result = await notificationCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ error: "Notification not found" });
+        }
+
+        res.send({ message: "Notification deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting notification:", error);
+        res.status(500).send({ error: "Failed to delete notification" });
+      }
+    });
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
