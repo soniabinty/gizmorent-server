@@ -26,7 +26,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect(); // Keep the connection open
+    // await client.connect(); // Keep the connection open
     console.log("Connected to MongoDB!");
 
     const gadgetCollection = client.db("gizmorentdb").collection("gadget");
@@ -1560,6 +1560,15 @@ async function run() {
 
       res.send(result);
     });
+
+    // best deals
+    app.get("/best-deals", async (req, res) => {
+      const result = await gadgetCollection
+        .find({ category: "Best Deals" })
+        .limit(2)
+        .toArray();
+      res.send(result);
+    });
 
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
