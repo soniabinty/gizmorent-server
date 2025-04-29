@@ -57,6 +57,10 @@ async function run() {
       .db("gizmorentdb")
       .collection("notifications");
 
+      const withdrawCollection = client
+      .db("gizmorentdb")
+      .collection("withdraws");
+
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
