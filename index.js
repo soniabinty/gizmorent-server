@@ -47,7 +47,10 @@ async function run() {
     const renterGadgetCollection = client
       .db("gizmorentdb")
       .collection("renter-gadgets");
-    const notificationCollection = client.db("gizmorentdb").collection("notifications");
+    const notificationCollection = client
+      .db("gizmorentdb")
+      .collection("notifications");
+    const withdrawCollection = client.db("gizmorentdb").collection("withdraw");
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -251,7 +254,9 @@ async function run() {
           // Add notification for gadget deletion
           await notificationCollection.insertOne({
             userEmail, // Notify the user who deleted the gadget
-            message: `Your gadget "${gadget?.name || "Unknown"}" has been deleted successfully.`,
+            message: `Your gadget "${
+              gadget?.name || "Unknown"
+            }" has been deleted successfully.`,
             type: "gadget_deletion",
             isRead: false,
             createdAt: new Date(),
@@ -360,7 +365,6 @@ async function run() {
       res.send(result);
     });
 
-
     // get renter gadgets
     app.get("/renter-gadgets", async (req, res) => {
       const { status } = req.query;
@@ -405,7 +409,9 @@ async function run() {
       const existingRenter = await rentalRequestCollection.findOne({ email });
 
       if (existingRenter) {
-        res.status(400).send({ error: "You have already submitted a renter request." });
+        res
+          .status(400)
+          .send({ error: "You have already submitted a renter request." });
       } else {
         const newRenter = req.body;
 
@@ -445,7 +451,8 @@ async function run() {
       console.log("Approving renter:", req.params.email); // Debug log to check the email being passed
       const email = req.params.email;
 
-      const renterCode = "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+      const renterCode =
+        "RENTER-" + Math.random().toString(36).substr(2, 6).toUpperCase();
 
       try {
         const user = await userCollection.findOne({ email });
@@ -939,9 +946,6 @@ async function run() {
       }
     });
 
-
-  
-    
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
 
@@ -971,11 +975,8 @@ async function run() {
       const result = await paymentsCollection.insertOne(paymentInfo);
 
       res.send(result);
-    });
-    
+    });
 
-  
- 
     // get payment
 
     app.get("/payments", async (req, res) => {
@@ -1107,7 +1108,6 @@ async function run() {
       }
     });
 
-
     app.get("/orders/api", async (req, res) => {
       const { email } = req.query;
       const query = email ? { email } : {};
@@ -1120,12 +1120,10 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
     });
-  
-  
+
     // single order
     app.get("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
-
 
       if (!ObjectId.isValid(orderId)) {
         console.error("Invalid Order ID received:", orderId);
@@ -1146,7 +1144,6 @@ async function run() {
         console.error("Order fetch error:", error);
         res.status(500).json({ error: "Server error while fetching order." });
       }
-
     });
 
     // recent order
@@ -1161,8 +1158,6 @@ async function run() {
         console.error("Error fetching orders:", err);
         res.status(500).send({ error: "Failed to fetch the orders" });
       }
-
-    
     });
 
     app.get("/gadgets/top-rented", async (req, res) => {
@@ -1186,9 +1181,9 @@ async function run() {
               },
             },
 
-          { $unwind: "$gadgetInfo" },      // Flatten gadgetInfo array
-
-        ]).toArray();
+            { $unwind: "$gadgetInfo" }, // Flatten gadgetInfo array
+          ])
+          .toArray();
 
         res.send(topGadgets);
       } catch (err) {
@@ -1198,7 +1193,6 @@ async function run() {
           .send({ message: "Server error fetching top rented gadgets" });
       }
     });
-
 
     // monthly order stats
     app.get("/monthly-order", async (req, res) => {
@@ -1332,7 +1326,7 @@ async function run() {
     app.get("/websitereview", async (req, res) => {
       const reviews = await websitereviewCollection.find().toArray();
       res.send(reviews);
-    })
+    });
 
     // Add a notification
     app.post("/notifications", async (req, res) => {
@@ -1358,8 +1352,7 @@ async function run() {
     // Get all notifications
     app.get("/notifications/all", async (req, res) => {
       try {
-        const notifications = await notificationCollection
-          .find().toArray();
+        const notifications = await notificationCollection.find().toArray();
 
         res.send(notifications);
       } catch (error) {
@@ -1395,14 +1388,18 @@ async function run() {
 
     app.delete("/notifications/admin/all", async (req, res) => {
       try {
-        const result = await notificationCollection.deleteMany({ role: "admin" }); 
-        res.send({ message: "Admin notifications deleted", deletedCount: result.deletedCount });
+        const result = await notificationCollection.deleteMany({
+          role: "admin",
+        });
+        res.send({
+          message: "Admin notifications deleted",
+          deletedCount: result.deletedCount,
+        });
       } catch (error) {
         console.error("Error deleting admin notifications:", error);
         res.status(500).send({ error: "Failed to delete admin notifications" });
       }
     });
-
 
     // Get notifications for a user
     app.get("/notifications", async (req, res) => {
@@ -1414,7 +1411,6 @@ async function run() {
 
       try {
         let notifications;
-
 
         // Otherwise, fetch notifications specific to the user
         notifications = await notificationCollection
@@ -1463,7 +1459,9 @@ async function run() {
       }
 
       try {
-        const result = await notificationCollection.deleteOne({ _id: new ObjectId(id) });
+        const result = await notificationCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
 
         if (result.deletedCount === 0) {
           return res.status(404).send({ error: "Notification not found" });
@@ -1476,6 +1474,31 @@ async function run() {
       }
     });
 
+    // Withdraw payment system
+    app.post("/withdraw", async (req, res) => {
+      const withdrawalInfo = req.body;
+      const result = await withdrawCollection.insertOne(withdrawalInfo);
+      res.send(result);
+    });
+
+    // Get all withdrawal requests
+    app.get("/withdraw", async (req, res) => {
+      const result = await withdrawCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Status update for withdraw request
+    app.patch("/withdraw/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const result = await withdrawCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: status } }
+      );
+
+      res.send(result);
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
