@@ -48,6 +48,7 @@ async function run() {
       .db("gizmorentdb")
       .collection("renter-gadgets");
 
+
     const subscriptionsCollection = client
       .db("gizmorentdb")
       .collection("subscriptions");
@@ -55,6 +56,7 @@ async function run() {
     const notificationCollection = client
       .db("gizmorentdb")
       .collection("notifications");
+
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -1527,6 +1529,34 @@ async function run() {
         res.status(500).send({ error: "Failed to delete notification" });
       }
     });
+
+
+    // Withdraw payment system
+    app.post("/withdraw", async (req, res) => {
+      const withdrawalInfo = req.body;
+      const result = await withdrawCollection.insertOne(withdrawalInfo);
+      res.send(result);
+    });
+
+    // Get all withdrawal requests
+    app.get("/withdraw", async (req, res) => {
+      const result = await withdrawCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Status update for withdraw request
+    app.patch("/withdraw/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const result = await withdrawCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: status } }
+      );
+
+      res.send(result);
+    });
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
