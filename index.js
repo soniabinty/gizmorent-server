@@ -47,10 +47,16 @@ async function run() {
     const renterGadgetCollection = client
       .db("gizmorentdb")
       .collection("renter-gadgets");
+
+
+    const subscriptionsCollection = client
+      .db("gizmorentdb")
+      .collection("subscriptions");
+
     const notificationCollection = client
       .db("gizmorentdb")
       .collection("notifications");
-    const withdrawCollection = client.db("gizmorentdb").collection("withdraw");
+
 
     // admin
     app.get("/users/admin/:email", async (req, res) => {
@@ -1349,6 +1355,56 @@ async function run() {
       }
     });
 
+    // subcription
+    app.post("/subscription", async (req, res) => {
+      const { email, planName, planPrice, planPeriod } = req.body;
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setMonth(startDate.getMonth() + 1);
+
+      try {
+        await subscriptionsCollection.updateMany(
+          { email, active: true },
+          { $set: { active: false } }
+        );
+
+        const subscription = {
+          email,
+          planName,
+          planPrice,
+          planPeriod,
+          startDate,
+          endDate,
+          active: true,
+          gadgetsRented: 0,
+        };
+        const result = await subscriptionsCollection.insertOne(subscription);
+        res.send(result);
+      } catch (error) {
+        console.error("Error creating subscription:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+    app.get("/subscription/active", async (req, res) => {
+      const { email } = req.query;
+
+      try {
+        const activeSubscription = await subscriptionsCollection.findOne({
+          email,
+          active: true,
+        });
+
+        if (activeSubscription) {
+          res.json({ active: true, subscription: activeSubscription });
+        } else {
+          res.json({ active: false });
+        }
+      } catch (error) {
+        console.error("Error fetching subscription:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
     // Get all notifications
     app.get("/notifications/all", async (req, res) => {
       try {
@@ -1371,7 +1427,7 @@ async function run() {
         if (role === "admin") {
           // Fetch only notifications where role is admin
           notifications = await notificationCollection
-            .find({ role: "admin" }) // 🛑 Important filtering here
+            .find({ role: "admin" }) 
             .sort({ createdAt: -1 })
             .toArray();
         } else {
@@ -1474,6 +1530,7 @@ async function run() {
       }
     });
 
+
     // Withdraw payment system
     app.post("/withdraw", async (req, res) => {
       const withdrawalInfo = req.body;
@@ -1499,6 +1556,7 @@ async function run() {
 
       res.send(result);
     });
+
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
   }
