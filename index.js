@@ -117,7 +117,7 @@ async function run() {
         maxPrice,
         sort,
         page = 1,
-        limit = 8,
+        limit = 12,
       } = req.query;
 
       const filter = {};
@@ -1425,7 +1425,7 @@ async function run() {
         if (role === "admin") {
           // Fetch only notifications where role is admin
           notifications = await notificationCollection
-            .find({ role: "admin" }) // 🛑 Important filtering here
+            .find({ role: "admin" }) 
             .sort({ createdAt: -1 })
             .toArray();
         } else {
