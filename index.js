@@ -1562,12 +1562,42 @@ async function run() {
     });
 
     // best deals
-    app.get("/best-deals", async (req, res) => {
-      const result = await gadgetCollection
-        .find({ category: "Best Deals" })
-        .limit(2)
-        .toArray();
-      res.send(result);
+   app.get("/best-deals", async (req, res) => {
+      try {
+        const gadgets = await gadgetCollection
+          .find({ category: "Best Deals" })
+          .limit(2)
+          .toArray();
+
+        const gadgetIds = gadgets.map((g) => g._id.toString());
+
+        const reviews = await reviewCollection
+          .find({ productId: { $in: gadgetIds } })
+          .toArray();
+
+        const enrichedGadgets = gadgets.map((gadget) => {
+          const gadgetReviews = reviews.filter(
+            (review) => review.productId === gadget._id.toString()
+          );
+          const averageRating =
+            gadgetReviews.reduce((sum, r) => sum + r.rating, 0) /
+            (gadgetReviews.length || 1);
+
+          return {
+            ...gadget,
+            reviews: gadgetReviews,
+            averageRating: gadgetReviews.length
+              ? averageRating.toFixed(1)
+              : null,
+            reviewCount: gadgetReviews.length,
+          };
+        });
+
+        res.send(enrichedGadgets);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch best deals" });
+      }
     });
 
   } catch (error) {
