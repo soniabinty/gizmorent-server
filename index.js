@@ -123,16 +123,16 @@ async function run() {
         maxPrice,
         sort,
         page = 1,
-        limit = 12,
+        limit = 8,
       } = req.query;
-
+    
       const filter = {};
-
+    
       // Filter by category
       if (category && category !== "All") {
         filter.category = category;
       }
-
+    
       // Filter by search query
       if (query) {
         filter.$or = [
@@ -140,24 +140,22 @@ async function run() {
           { category: { $regex: query, $options: "i" } },
         ];
       }
-
+    
       // Price filter
       if (minPrice || maxPrice) {
         filter.price = {};
         if (minPrice) filter.price.$gte = parseFloat(minPrice);
         if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
       }
-
+    
       // Sort
       let sortOption = {};
       if (sort === "HighToLow") {
         sortOption = { price: -1 };
       } else if (sort === "LowToHigh") {
         sortOption = { price: 1 };
-      }
-
+      } 
       try {
-        // Calculate pagination values
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const gadgets = await gadgetCollection
           .find(filter)
@@ -165,21 +163,42 @@ async function run() {
           .skip(skip)
           .limit(parseInt(limit))
           .toArray();
-
-        // Get total count for pagination
+        const gadgetIds = gadgets.map((g) => g._id.toString());
+        const reviews = await reviewCollection
+          .find({ productId: { $in: gadgetIds } })
+          .toArray();
+        const enrichedGadgets = gadgets.map((gadget) => {
+          const gadgetReviews = reviews.filter(
+            (r) => r.productId === gadget._id.toString()
+          );
+    
+          const averageRating =
+            gadgetReviews.reduce((sum, r) => sum + r.rating, 0) /
+            (gadgetReviews.length || 1);
+    
+          return {
+            ...gadget,
+            averageRating: gadgetReviews.length
+              ? averageRating.toFixed(1)
+              : null,
+            reviewCount: gadgetReviews.length,
+          };
+        });
+    
+   
         const totalItems = await gadgetCollection.countDocuments(filter);
         const totalPages = Math.ceil(totalItems / parseInt(limit));
-
+    
         res.json({
-          gadgets,
+          gadgets: enrichedGadgets,
           currentPage: parseInt(page),
           totalPages: totalPages,
         });
       } catch (error) {
-        res.status(500).json({ message: "Error fetching gadgets", error });
-      }
+        console.error(error);
+        res.status(500).json({ message: "Error fetching gadgets", error });
+      }
     });
-
     // one gadget by id
     app.get("/gadgets/:id", async (req, res) => {
       const id = req.params.id;
@@ -296,14 +315,14 @@ async function run() {
     });
 
     // top rented gadgets
+ 
     app.get("/top-rented-gadgets", async (req, res) => {
       try {
-        const topRentedGadgets = await ordersCollection
+      
+        const rentedGadgets = await ordersCollection
           .aggregate([
             {
-              $match: {
-                product_id: { $exists: true, $ne: null },
-              },
+              $match: { product_id: { $exists: true, $ne: null } },
             },
             {
               $group: {
@@ -311,39 +330,57 @@ async function run() {
                 totalRented: { $sum: 1 },
               },
             },
-            {
-              $sort: { totalRented: -1 },
-            },
-            // {
-            //   $limit: 20,
-            // },
-            {
-              $addFields: {
-                objectId: { $toObjectId: "$_id" }, // create correct ObjectId
-              },
-            },
-            {
-              $lookup: {
-                from: "gadget",
-                localField: "objectId",
-                foreignField: "_id",
-                as: "gadgetDetails",
-              },
-            },
-            {
-              $unwind: "$gadgetDetails",
-            },
-            {
-              $limit: 10,
-            },
+            { $sort: { totalRented: -1 } },
+            { $limit: 10 },
           ])
           .toArray();
+    
+        const productIds = rentedGadgets.map((item) => item._id);
+    
+        
+        const gadgets = await gadgetCollection
+          .find({ _id: { $in: productIds.map((id) => new ObjectId(id)) } })
+          .toArray();
+    
+        
+        const reviews = await reviewCollection
+          .find({ productId: { $in: productIds } })
+          .toArray();
+    
 
-        res.send(topRentedGadgets);
+        const enriched = rentedGadgets.map((item) => {
+          const gadget = gadgets.find((g) => g._id.toString() === item._id);
+          if (!gadget) {
+           
+            return null;
+          }
+    
+          const gadgetReviews = reviews.filter(
+            (r) => r.productId === item._id
+          );
+    
+          const averageRating =
+            gadgetReviews.reduce((sum, r) => sum + r.rating, 0) /
+            (gadgetReviews.length || 1);
+    
+          return {
+            ...gadget,
+            totalRented: item.totalRented,
+            averageRating: gadgetReviews.length
+              ? averageRating.toFixed(1)
+              : null,
+            reviewCount: gadgetReviews.length,
+          };
+        });
+    
+       
+        const finalResult = enriched.filter(Boolean);
+    
+        res.send(finalResult);
       } catch (error) {
-        console.error(error);
-        res.status(500).send({ message: "Something went wrong" });
-      }
+        console.error("Error in /top-rented-gadgets:", error);
+        res.status(500).send({ message: "Something went wrong" });
+      }
     });
 
     app.get("/product-review/:productId", async (req, res) => {
